@@ -3435,7 +3435,6 @@ static int taiko_volatile(struct snd_soc_codec *ssc, unsigned int reg)
 	return 0;
 }
 
-#define TAIKO_FORMATS (SNDRV_PCM_FMTBIT_S16_LE)
 static int taiko_write(struct snd_soc_codec *codec, unsigned int reg,
 	unsigned int value)
 {
@@ -3940,7 +3939,7 @@ static struct snd_soc_dai_driver taiko_dai[] = {
 		.playback = {
 			.stream_name = "AIF1 Playback",
 			.rates = WCD9320_RATES,
-			.formats = TAIKO_FORMATS,
+			.formats = TAIKO_FORMATS_S16_S24_LE,
 			.rate_max = 192000,
 			.rate_min = 8000,
 			.channels_min = 1,
@@ -3968,7 +3967,7 @@ static struct snd_soc_dai_driver taiko_dai[] = {
 		.playback = {
 			.stream_name = "AIF2 Playback",
 			.rates = WCD9320_RATES,
-			.formats = TAIKO_FORMATS,
+			.formats = TAIKO_FORMATS_S16_S24_LE,
 			.rate_min = 8000,
 			.rate_max = 192000,
 			.channels_min = 1,
@@ -4010,7 +4009,7 @@ static struct snd_soc_dai_driver taiko_dai[] = {
 		.playback = {
 			.stream_name = "AIF3 Playback",
 			.rates = WCD9320_RATES,
-			.formats = TAIKO_FORMATS,
+			.formats = TAIKO_FORMATS_S16_S24_LE,
 			.rate_min = 8000,
 			.rate_max = 192000,
 			.channels_min = 1,

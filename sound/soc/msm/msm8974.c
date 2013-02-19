@@ -25,6 +25,7 @@
 #include <sound/jack.h>
 #include <asm/mach-types.h>
 #include <mach/socinfo.h>
+#include <sound/pcm_params.h>
 #include <qdsp6v2/msm-pcm-routing-v2.h>
 #include "../codecs/wcd9320.h"
 
@@ -444,6 +445,43 @@ static const struct soc_enum msm_btsco_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, btsco_rate_text),
 };
 
+static int slim0_rx_bit_format_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+
+	switch (slim0_rx_bit_format) {
+	case SNDRV_PCM_FORMAT_S24_LE:
+		ucontrol->value.integer.value[0] = 1;
+		break;
+
+	case SNDRV_PCM_FORMAT_S16_LE:
+	default:
+		ucontrol->value.integer.value[0] = 0;
+		break;
+	}
+
+	pr_debug("%s: slim0_rx_bit_format = %d, ucontrol value = %ld\n",
+			 __func__, slim0_rx_bit_format,
+			ucontrol->value.integer.value[0]);
+
+	return 0;
+}
+
+static int slim0_rx_bit_format_put(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	switch (ucontrol->value.integer.value[0]) {
+	case 1:
+		slim0_rx_bit_format = SNDRV_PCM_FORMAT_S24_LE;
+		break;
+	case 0:
+	default:
+		slim0_rx_bit_format = SNDRV_PCM_FORMAT_S16_LE;
+		break;
+	}
+	return 0;
+}
+
 static int msm_slim_0_rx_ch_get(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
 {
@@ -620,8 +658,14 @@ static int msm_slim_0_rx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	    hw_param_interval(params, SNDRV_PCM_HW_PARAM_CHANNELS);
 
 	pr_debug("%s()\n", __func__);
+	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
+				   slim0_rx_bit_format);
 	rate->min = rate->max = 48000;
 	channels->min = channels->max = msm_slim_0_rx_ch;
+
+	 pr_debug("%s: format = %d, rate = %d, channels = %d\n",
+			  __func__, params_format(params), params_rate(params),
+			  msm_slim_0_rx_ch);
 
 	return 0;
 }

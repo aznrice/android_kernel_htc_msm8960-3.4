@@ -281,7 +281,7 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology)
 			open.topology_id = topology;
 
 		open.dev_num_channel = channel_mode & 0x00FF;
-		open.bit_width = 16;
+		open.bit_width = bits_per_sample;
 		open.sample_rate  = rate;
 		memset(open.dev_channel_mapping, 0, 8);
 
@@ -334,7 +334,6 @@ fail_cmd:
 
 	return ret;
 }
-
 
 int adm_multi_ch_copp_open(int port_id, int path, int rate, int channel_mode,
 				int topology)

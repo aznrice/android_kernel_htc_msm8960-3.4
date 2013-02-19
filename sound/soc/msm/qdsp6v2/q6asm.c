@@ -1338,7 +1338,9 @@ static int __q6asm_open_read(struct audio_client *ac,
 fail_cmd:
 	return -EINVAL;
 }
-int q6asm_open_write(struct audio_client *ac, uint32_t format)
+
+static int __q6asm_open_write(struct audio_client *ac, uint32_t format,
+		uint16_t bits_per_sample)
 {
 	int rc = 0x00;
 	struct asm_stream_cmd_open_write_v2 open;
@@ -1356,7 +1358,7 @@ int q6asm_open_write(struct audio_client *ac, uint32_t format)
 	open.mode_flags = 0x00;
 	/* source endpoint : matrix */
 	open.sink_endpointype = ASM_END_POINT_DEVICE_MATRIX;
-	open.bits_per_sample = 16;
+	open.bits_per_sample = bits_per_sample;
 
 	open.postprocopo_id = get_asm_topology();
 	if (open.postprocopo_id == 0)
@@ -1401,6 +1403,17 @@ int q6asm_open_write(struct audio_client *ac, uint32_t format)
 	return 0;
 fail_cmd:
 	return -EINVAL;
+}
+
+int q6asm_open_write(struct audio_client *ac, uint32_t format)
+{
+	return __q6asm_open_write(ac, format, 16);
+}
+
+int q6asm_open_write_v2(struct audio_client *ac, uint32_t format,
+		uint16_t bits_per_sample)
+{
+	return __q6asm_open_write(ac, format, bits_per_sample);
 }
 
 int q6asm_open_read_write(struct audio_client *ac,
@@ -2067,8 +2080,9 @@ int q6asm_media_format_block_aac(struct audio_client *ac,
 	return q6asm_media_format_block_multi_aac(ac, cfg);
 }
 
-int q6asm_media_format_block_pcm(struct audio_client *ac,
-				uint32_t rate, uint32_t channels)
+static int __q6asm_media_format_block_pcm(struct audio_client *ac,
+				uint32_t rate, uint32_t channels,
+				uint16_t bits_per_sample)
 {
 	struct asm_multi_channel_pcm_fmt_blk_v2 fmt;
 	u8 *channel_mapping;
@@ -2083,7 +2097,7 @@ int q6asm_media_format_block_pcm(struct audio_client *ac,
 	fmt.fmt_blk.fmt_blk_size = sizeof(fmt) - sizeof(fmt.hdr) -
 					sizeof(fmt.fmt_blk);
 	fmt.num_channels = channels;
-	fmt.bits_per_sample = 16;
+	fmt.bits_per_sample = bits_per_sample;
 	fmt.sample_rate = rate;
 	fmt.is_signed = 1;
 

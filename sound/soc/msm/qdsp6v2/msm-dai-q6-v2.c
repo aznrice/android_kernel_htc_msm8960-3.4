@@ -437,6 +437,18 @@ static int msm_dai_q6_cdc_hw_params(struct snd_pcm_hw_params *params,
 		return -EINVAL;
 		break;
 	}
+
+	switch (params_format(params)) {
+	case SNDRV_PCM_FORMAT_S16_LE:
+		dai_data->port_config.i2s.bit_width = 16;
+		break;
+	case SNDRV_PCM_FORMAT_S24_LE:
+		dai_data->port_config.i2s.bit_width = 24;
+		break;
+	default:
+		return -EINVAL;
+	}
+
 	dai_data->rate = params_rate(params);
 	dai_data->port_config.i2s.sample_rate = dai_data->rate;
 	dai_data->port_config.i2s.i2s_cfg_minor_version =
@@ -445,8 +457,6 @@ static int msm_dai_q6_cdc_hw_params(struct snd_pcm_hw_params *params,
 	dev_dbg(dai->dev, " channel %d sample rate %d entered\n",
 	dai_data->channels, dai_data->rate);
 
-	/* Q6 only supports 16 as now */
-	dai_data->port_config.i2s.bit_width = 16;
 	dai_data->port_config.i2s.channel_mode = 1;
 	return 0;
 }
@@ -503,10 +513,19 @@ static int msm_dai_q6_slim_bus_hw_params(struct snd_pcm_hw_params *params,
 	dai_data->channels = params_channels(params);
 	dai_data->rate = params_rate(params);
 
-	/* Q6 only supports 16 as now */
+	switch (params_format(params)) {
+	case SNDRV_PCM_FORMAT_S16_LE:
+		dai_data->port_config.slim_sch.bit_width = 16;
+		break;
+	case SNDRV_PCM_FORMAT_S24_LE:
+		dai_data->port_config.slim_sch.bit_width = 24;
+		break;
+	default:
+		return -EINVAL;
+	}
+
 	dai_data->port_config.slim_sch.sb_cfg_minor_version =
 				AFE_API_VERSION_SLIMBUS_CONFIG;
-	dai_data->port_config.slim_sch.bit_width = 16;
 	dai_data->port_config.slim_sch.data_format = 0;
 	dai_data->port_config.slim_sch.num_channels = dai_data->channels;
 	dai_data->port_config.slim_sch.sample_rate = dai_data->rate;
