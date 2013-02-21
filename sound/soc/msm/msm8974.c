@@ -43,10 +43,109 @@
 #define BTSCO_RATE_8KHZ 8000
 #define BTSCO_RATE_16KHZ 16000
 
-#define BOTTOM_SPK_AMP_POS	0x1
-#define BOTTOM_SPK_AMP_NEG	0x2
-#define TOP_SPK_AMP_POS		0x4
-#define TOP_SPK_AMP_NEG		0x8
+static int slim0_rx_bit_format = SNDRV_PCM_FORMAT_S16_LE;
+
+#define SAMPLING_RATE_48KHZ 48000
+#define SAMPLING_RATE_96KHZ 96000
+
+static int msm8974_auxpcm_rate = 8000;
+#define LO_1_SPK_AMP	0x1
+#define LO_3_SPK_AMP	0x2
+#define LO_2_SPK_AMP	0x4
+#define LO_4_SPK_AMP	0x8
+
+#define LPAIF_OFFSET 0xFE000000
+#define LPAIF_PRI_MODE_MUXSEL (LPAIF_OFFSET + 0x2B000)
+#define LPAIF_SEC_MODE_MUXSEL (LPAIF_OFFSET + 0x2C000)
+#define LPAIF_TER_MODE_MUXSEL (LPAIF_OFFSET + 0x2D000)
+#define LPAIF_QUAD_MODE_MUXSEL (LPAIF_OFFSET + 0x2E000)
+
+#define I2S_PCM_SEL 1
+#define I2S_PCM_SEL_OFFSET 1
+
+
+#define WCD9XXX_MBHC_DEF_BUTTONS 8
+#define WCD9XXX_MBHC_DEF_RLOADS 5
+#define TAIKO_EXT_CLK_RATE 9600000
+
+/* It takes about 13ms for Class-D PAs to ramp-up */
+#define EXT_CLASS_D_EN_DELAY 13000
+#define EXT_CLASS_D_DIS_DELAY 3000
+#define EXT_CLASS_D_DELAY_DELTA 2000
+
+#define NUM_OF_AUXPCM_GPIOS 4
+
+static inline int param_is_mask(int p)
+{
+	return ((p >= SNDRV_PCM_HW_PARAM_FIRST_MASK) &&
+			(p <= SNDRV_PCM_HW_PARAM_LAST_MASK));
+}
+
+static inline struct snd_mask *param_to_mask(struct snd_pcm_hw_params *p, int n)
+{
+	return &(p->masks[n - SNDRV_PCM_HW_PARAM_FIRST_MASK]);
+}
+
+static void param_set_mask(struct snd_pcm_hw_params *p, int n, unsigned bit)
+{
+	if (bit >= SNDRV_MASK_MAX)
+		return;
+	if (param_is_mask(n)) {
+		struct snd_mask *m = param_to_mask(p, n);
+		m->bits[0] = 0;
+		m->bits[1] = 0;
+		m->bits[bit >> 5] |= (1 << (bit & 31));
+	}
+}
+
+static const char *const auxpcm_rate_text[] = {"rate_8000", "rate_16000"};
+static const struct soc_enum msm8974_auxpcm_enum[] = {
+		SOC_ENUM_SINGLE_EXT(2, auxpcm_rate_text),
+};
+
+void *def_taiko_mbhc_cal(void);
+static int msm_snd_enable_codec_ext_clk(struct snd_soc_codec *codec, int enable,
+					bool dapm);
+
+static struct wcd9xxx_mbhc_config mbhc_cfg = {
+	.read_fw_bin = false,
+	.calibration = NULL,
+	.micbias = MBHC_MICBIAS2,
+	.mclk_cb_fn = msm_snd_enable_codec_ext_clk,
+	.mclk_rate = TAIKO_EXT_CLK_RATE,
+	.gpio = 0,
+	.gpio_irq = 0,
+	.gpio_level_insert = 1,
+	.detect_extn_cable = true,
+	.insert_detect = true,
+	.swap_gnd_mic = NULL,
+};
+
+struct msm_auxpcm_gpio {
+	unsigned gpio_no;
+	const char *gpio_name;
+};
+
+struct msm_auxpcm_ctrl {
+	struct msm_auxpcm_gpio *pin_data;
+	u32 cnt;
+};
+
+struct msm8974_asoc_mach_data {
+	int mclk_gpio;
+	u32 mclk_freq;
+	struct msm_auxpcm_ctrl *pri_auxpcm_ctrl;
+};
+
+#define GPIO_NAME_INDEX 0
+#define DT_PARSE_INDEX  1
+
+static char *msm_auxpcm_gpio_name[][2] = {
+	{"PRIM_AUXPCM_CLK",       "prim-auxpcm-gpio-clk"},
+	{"PRIM_AUXPCM_SYNC",      "prim-auxpcm-gpio-sync"},
+	{"PRIM_AUXPCM_DIN",       "prim-auxpcm-gpio-din"},
+	{"PRIM_AUXPCM_DOUT",      "prim-auxpcm-gpio-dout"},
+};
 
 #define GPIO_AUX_PCM_DOUT 43
 #define GPIO_AUX_PCM_DIN 44
@@ -77,10 +176,9 @@ static int msm_slim_0_rx_ch = 1;
 static int msm_slim_0_tx_ch = 1;
 
 static int msm_btsco_rate = BTSCO_RATE_8KHZ;
-static int msm_headset_gpios_configured;
-
-static struct snd_soc_jack hs_jack;
-static struct snd_soc_jack button_jack;
+static int msm_btsco_ch = 1;
+static int msm_hdmi_rx_ch = 2;
+static int slim0_rx_sample_rate = SAMPLING_RATE_48KHZ;
 
 static struct mutex cdc_mclk_mutex;
 static struct q_clkdiv *codec_clk;
@@ -433,6 +531,10 @@ static const struct snd_soc_dapm_route common_audio_map[] = {
 static const char *const spk_function[] = {"Off", "On"};
 static const char *const slim0_rx_ch_text[] = {"One", "Two"};
 static const char *const slim0_tx_ch_text[] = {"One", "Two", "Three", "Four"};
+static char const *hdmi_rx_ch_text[] = {"Two", "Three", "Four", "Five",
+					"Six", "Seven", "Eight"};
+static char const *rx_bit_format_text[] = {"S16_LE", "S24_LE"};
+static char const *slim0_rx_sample_rate_text[] = {"KHZ_48", "KHZ_96"};
 
 static const struct soc_enum msm_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, spk_function),
@@ -444,6 +546,50 @@ static const char *const btsco_rate_text[] = {"8000", "16000"};
 static const struct soc_enum msm_btsco_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, btsco_rate_text),
 };
+
+static int slim0_rx_sample_rate_get(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	int sample_rate_val = 0;
+
+	switch (slim0_rx_sample_rate) {
+	case SAMPLING_RATE_96KHZ:
+		sample_rate_val = 1;
+		break;
+
+	case SAMPLING_RATE_48KHZ:
+	default:
+		sample_rate_val = 0;
+		break;
+	}
+
+	ucontrol->value.integer.value[0] = sample_rate_val;
+	pr_debug("%s: slim0_rx_sample_rate = %d\n", __func__,
+				slim0_rx_sample_rate);
+
+	return 0;
+}
+
+static int slim0_rx_sample_rate_put(struct snd_kcontrol *kcontrol,
+	struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s: ucontrol value = %ld\n", __func__,
+			ucontrol->value.integer.value[0]);
+
+	switch (ucontrol->value.integer.value[0]) {
+	case 1:
+		slim0_rx_sample_rate = SAMPLING_RATE_96KHZ;
+		break;
+	case 0:
+	default:
+		slim0_rx_sample_rate = SAMPLING_RATE_48KHZ;
+	}
+
+	pr_debug("%s: slim0_rx_sample_rate = %d\n", __func__,
+			slim0_rx_sample_rate);
+
+	return 0;
+}
 
 static int slim0_rx_bit_format_get(struct snd_kcontrol *kcontrol,
 	struct snd_ctl_elem_value *ucontrol)
@@ -660,7 +806,7 @@ static int msm_slim_0_rx_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	pr_debug("%s()\n", __func__);
 	param_set_mask(params, SNDRV_PCM_HW_PARAM_FORMAT,
 				   slim0_rx_bit_format);
-	rate->min = rate->max = 48000;
+	rate->min = rate->max = slim0_rx_sample_rate;
 	channels->min = channels->max = msm_slim_0_rx_ch;
 
 	 pr_debug("%s: format = %d, rate = %d, channels = %d\n",
@@ -690,6 +836,9 @@ static const struct soc_enum msm_snd_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, spk_function),
 	SOC_ENUM_SINGLE_EXT(2, slim0_rx_ch_text),
 	SOC_ENUM_SINGLE_EXT(4, slim0_tx_ch_text),
+	SOC_ENUM_SINGLE_EXT(7, hdmi_rx_ch_text),
+	SOC_ENUM_SINGLE_EXT(2, rx_bit_format_text),
+	SOC_ENUM_SINGLE_EXT(2, slim0_rx_sample_rate_text),
 };
 
 static const struct snd_kcontrol_new msm_snd_controls[] = {
@@ -698,7 +847,15 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 	SOC_ENUM_EXT("SLIM_0_RX Channels", msm_snd_enum[1],
 		     msm_slim_0_rx_ch_get, msm_slim_0_rx_ch_put),
 	SOC_ENUM_EXT("SLIM_0_TX Channels", msm_snd_enum[2],
-		     msm_slim_0_tx_ch_get, msm_slim_0_tx_ch_put),
+			msm_slim_0_tx_ch_get, msm_slim_0_tx_ch_put),
+	SOC_ENUM_EXT("AUX PCM SampleRate", msm8974_auxpcm_enum[0],
+			msm8974_auxpcm_rate_get, msm8974_auxpcm_rate_put),
+	SOC_ENUM_EXT("HDMI_RX Channels", msm_snd_enum[3],
+			msm_hdmi_rx_ch_get, msm_hdmi_rx_ch_put),
+	SOC_ENUM_EXT("SLIM_0_RX Format", msm_snd_enum[4],
+			slim0_rx_bit_format_get, slim0_rx_bit_format_put),
+	SOC_ENUM_EXT("SLIM_0_RX SampleRate", msm_snd_enum[5],
+			slim0_rx_sample_rate_get, slim0_rx_sample_rate_put),
 };
 
 static int msm_audrx_init(struct snd_soc_pcm_runtime *rtd)
