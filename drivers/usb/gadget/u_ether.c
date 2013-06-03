@@ -834,6 +834,8 @@ static int eth_stop(struct net_device *net)
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->port_usb) {
 		struct gether	*link = dev->port_usb;
+		const struct usb_endpoint_descriptor *in;
+		const struct usb_endpoint_descriptor *out;
 
 		if (link->close)
 			link->close(link);
@@ -847,6 +849,8 @@ static int eth_stop(struct net_device *net)
 		 * their own pace; the network stack can handle old packets.
 		 * For the moment we leave this here, since it works.
 		 */
+		in = link->in_ep->desc;
+		out = link->out_ep->desc;
 		usb_ep_disable(link->in_ep);
 		usb_ep_disable(link->out_ep);
 		if (netif_carrier_ok(net)) {
@@ -854,8 +858,8 @@ static int eth_stop(struct net_device *net)
 					       link->in_ep) ||
 			    config_ep_by_speed(dev->gadget, &link->func,
 					       link->out_ep)) {
-				link->in_ep->desc = NULL;
-				link->out_ep->desc = NULL;
+				link->in_ep->desc = in;
+				link->out_ep->desc = out;
 				return -EINVAL;
 			}
 			DBG(dev, "host still using in/out endpoints\n");
