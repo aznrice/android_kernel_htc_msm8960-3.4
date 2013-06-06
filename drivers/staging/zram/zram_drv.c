@@ -170,13 +170,21 @@ out:
 	zram->table[index].size = 0;
 }
 
+static inline int is_partial_io(struct bio_vec *bvec)
+{
+	return bvec->bv_len != PAGE_SIZE;
+}
+
 static void handle_zero_page(struct bio_vec *bvec)
 {
 	struct page *page = bvec->bv_page;
 	void *user_mem;
 
 	user_mem = kmap_atomic(page);
-	memset(user_mem + bvec->bv_offset, 0, bvec->bv_len);
+	if (is_partial_io(bvec))
+		memset(user_mem + bvec->bv_offset, 0, bvec->bv_len);
+	else
+		clear_page(user_mem);
 	kunmap_atomic(user_mem);
 
 	flush_dcache_page(page);
@@ -196,11 +204,6 @@ static void handle_uncompressed_page(struct zram *zram, struct bio_vec *bvec,
 	kunmap_atomic(user_mem);
 
 	flush_dcache_page(page);
-}
-
-static inline int is_partial_io(struct bio_vec *bvec)
-{
-	return bvec->bv_len != PAGE_SIZE;
 }
 
 static int zram_bvec_read(struct zram *zram, struct bio_vec *bvec,
@@ -284,7 +287,7 @@ static int zram_read_before_write(struct zram *zram, char *mem, u32 index)
 
 	if (zram_test_flag(zram, index, ZRAM_ZERO) ||
 	    !zram->table[index].handle) {
-		memset(mem, 0, PAGE_SIZE);
+		clear_page(mem);
 		return 0;
 	}
 
@@ -292,7 +295,7 @@ static int zram_read_before_write(struct zram *zram, char *mem, u32 index)
 
 	/* Page is stored uncompressed since it's incompressible */
 	if (unlikely(zram_test_flag(zram, index, ZRAM_UNCOMPRESSED))) {
-		memcpy(mem, cmem, PAGE_SIZE);
+		copy_page(mem, cmem);
 		kunmap_atomic(cmem);
 		return 0;
 	}
@@ -423,8 +426,14 @@ memstore:
 	}
 #endif
 
-	memcpy(cmem, src, clen);
-
+	if ((clen == PAGE_SIZE) && !is_partial_io(bvec)) {
+		src = kmap_atomic(page);
+		copy_page(cmem, src);
+		kunmap_atomic(src);
+	} else {
+		memcpy(cmem, src, clen);
+	}
+ 
 	if (unlikely(zram_test_flag(zram, index, ZRAM_UNCOMPRESSED))) {
 		kunmap_atomic(cmem);
 		kunmap_atomic(src);
