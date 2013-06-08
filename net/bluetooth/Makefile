@@ -1,7 +1,9 @@
 #
 # Makefile for the Linux Bluetooth subsystem.
 #
-
+ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
+CFLAGS_l2cap_core.o += -fno-ipa-cp-clone
+endif
 obj-$(CONFIG_BT)	+= bluetooth.o
 obj-$(CONFIG_BT_RFCOMM)	+= rfcomm/
 obj-$(CONFIG_BT_BNEP)	+= bnep/
