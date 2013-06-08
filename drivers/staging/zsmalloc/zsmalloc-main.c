@@ -706,7 +706,7 @@ EXPORT_SYMBOL_GPL(zs_free);
  * This function returns with preemption and page faults disabled.
  */
 
-void *zs_map_object(struct zs_pool *pool,void *handle,
+void *zs_map_object(struct zs_pool *pool, void *handle,
 			enum zs_mapmode mm)
 {
 	struct page *page;
