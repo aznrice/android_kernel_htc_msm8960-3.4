@@ -194,6 +194,12 @@ static wait_queue_head_t subsystem_restart_wait;
 static struct workqueue_struct *msm_ipc_router_workqueue;
 
 enum {
+	CLIENT_PORT,
+	SERVER_PORT,
+	CONTROL_PORT,
+};
+
+enum {
 	DOWN,
 	UP,
 };
@@ -1467,9 +1473,11 @@ static int process_control_msg(struct msm_ipc_router_xprt_info *xprt_info,
 				if (!rport_ptr)
 					pr_err("%s: Remote port create "
 					       "failed\n", __func__);
-				rport_ptr->sec_rule =
-					msm_ipc_get_security_rule(
-					msg->srv.service, msg->srv.instance);
+				else
+					rport_ptr->sec_rule =
+						msm_ipc_get_security_rule(
+						msg->srv.service,
+						msg->srv.instance);
 			}
 			wake_up(&newserver_wait);
 		}
@@ -1786,6 +1794,7 @@ static int loopback_data(struct msm_ipc_port *src,
 	head_skb = skb_peek(pkt->pkt_fragment_q);
 	if (!head_skb) {
 		pr_err("%s: pkt_fragment_q is empty\n", __func__);
+		release_pkt(pkt);
 		return -EINVAL;
 	}
 	hdr = (struct rr_header *)skb_push(head_skb, IPC_ROUTER_HDR_SIZE);
@@ -2154,11 +2163,6 @@ int msm_ipc_router_close_port(struct msm_ipc_port *port_ptr)
 		mutex_lock(&control_ports_lock);
 		list_del(&port_ptr->list);
 		mutex_unlock(&control_ports_lock);
-	} else if (port_ptr->type == IRSC_PORT) {
-		mutex_lock(&local_ports_lock);
-		list_del(&port_ptr->list);
-		mutex_unlock(&local_ports_lock);
-		signal_irsc_completion();
 	}
 
 	mutex_lock(&port_ptr->port_rx_q_lock);
