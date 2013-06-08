@@ -1,3 +1,6 @@
+ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
+CFLAGS_adreno.o += -Os
+endif
 ccflags-y := -Iinclude/drm -Idrivers/gpu/msm
 
 msm_kgsl_core-y = \
