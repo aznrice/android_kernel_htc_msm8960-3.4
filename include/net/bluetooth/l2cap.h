@@ -426,6 +426,8 @@ struct l2cap_chan_list {
 	rwlock_t	lock;
 };
 
+struct smp_chan;
+
 struct l2cap_conn {
 	struct hci_conn	*hcon;
 
@@ -442,6 +444,7 @@ struct l2cap_conn {
 	__u8		info_ident;
 
 	struct timer_list info_timer;
+	struct smp_chan *smp_chan;
 
 	spinlock_t	lock;
 
