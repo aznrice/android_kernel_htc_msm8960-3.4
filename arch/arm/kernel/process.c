@@ -169,13 +169,14 @@ void soft_restart(unsigned long addr)
 {
 	u64 *stack = soft_restart_stack + ARRAY_SIZE(soft_restart_stack);
 
+	BUG_ON(num_online_cpus() > 1);
+
 	/* Disable interrupts first */
 	local_irq_disable();
 	local_fiq_disable();
 
-	/* Disable the L2 if we're the last man standing. */
-	if (num_online_cpus() == 1)
-		outer_disable();
+	/* Disable the L2 */
+	outer_disable();
 
 	/* Change to the new stack and continue with the reset. */
 	call_with_stack(__soft_restart, (void *)addr, (void *)stack);
@@ -297,40 +298,41 @@ int __init reboot_setup(char *str)
 
 __setup("reboot=", reboot_setup);
 
+/* For kexec */
 void machine_shutdown(void)
 {
 	preempt_disable();
-#ifdef CONFIG_SMP
-	/*
-	 * Disable preemption so we're guaranteed to
-	 * run to power off or reboot and prevent
-	 * the possibility of switching to another
-	 * thread that might wind up blocking on
-	 * one of the stopped CPUs.
-	 */
-	preempt_disable();
-
-	smp_send_stop();
+#ifdef CONFIG_PM_SLEEP_SMP
+	disable_nonboot_cpus();
 #endif
+
+	BUG_ON(num_online_cpus() > 1);
 }
 
 void machine_halt(void)
 {
-	machine_shutdown();
+#ifdef CONFIG_SMP
+	smp_send_stop();
+#endif
+
 	local_irq_disable();
 	while (1);
 }
 
 void machine_power_off(void)
 {
-	machine_shutdown();
+#ifdef CONFIG_SMP
+	smp_send_stop();
+#endif
 	if (pm_power_off)
 		pm_power_off();
 }
 
 void machine_restart(char *cmd)
 {
-	machine_shutdown();
+#ifdef CONFIG_SMP
+	smp_send_stop();
+#endif
 
 	/* Flush the console to make sure all the relevant messages make it
 	 * out to the console drivers */
