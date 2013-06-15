@@ -3331,10 +3331,10 @@ static struct platform_device *common_devices[] __initdata = {
 #ifdef CONFIG_HW_RANDOM_MSM
 	&msm_device_rng,
 #endif
-//	&msm_rpm_device,
 #ifdef CONFIG_ION_MSM
 	&ion_dev,
 #endif
+	&msm8960_rpm_device,
 	&msm8960_rpm_log_device,
 	&msm8960_rpm_stat_device,
 #ifdef CONFIG_MSM_QDSS
