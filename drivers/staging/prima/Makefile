@@ -1,5 +1,7 @@
 MODNAME := prima_wlan
-
+ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
+CFLAGS_btcApi.o += -O2
+endif
 #Do we panic on bug?  default is to warn
 PANIC_ON_BUG := 0
 
