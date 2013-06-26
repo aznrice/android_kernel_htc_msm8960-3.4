@@ -375,7 +375,7 @@ KBUILD_CFLAGS   := -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs \
 		   -mtune=cortex-a15 \
 		   -fno-delete-null-pointer-checks \
 		   -fmodulo-sched -fmodulo-sched-allow-regmoves \
-		   -fno-tree-vectorize -pipe
+		   -fno-tree-vectorize -pipe -Wno-sizeof-pointer-memaccess
 KBUILD_AFLAGS_KERNEL :=
 KBUILD_CFLAGS_KERNEL :=
 KBUILD_AFLAGS   := -D__ASSEMBLY__
