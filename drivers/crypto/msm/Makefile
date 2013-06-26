@@ -1,3 +1,6 @@
+ifdef CONFIG_CC_OPTIMIZE_FOR_PERF
+CFLAGS_qcedev.o += -O2
+endif
 obj-$(CONFIG_CRYPTO_DEV_QCEDEV) += qcedev.o
 ifeq ($(CONFIG_CRYPTO_DEV_QCE50), y)
 	obj-$(CONFIG_CRYPTO_DEV_QCE) += qce50.o
