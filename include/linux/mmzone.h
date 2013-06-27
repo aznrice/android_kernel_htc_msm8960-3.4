@@ -151,9 +151,6 @@ enum zone_stat_item {
 #endif
 	NR_ANON_TRANSPARENT_HUGEPAGES,
 	NR_FREE_CMA_PAGES,
-#ifdef CONFIG_UKSM
-	NR_UKSM_ZERO_PAGES,
-#endif
 	NR_VM_ZONE_STAT_ITEMS };
 
 /*
@@ -414,9 +411,6 @@ struct zone {
 	/* Fields commonly accessed by the page reclaim scanner */
 	spinlock_t		lru_lock;
 	struct lruvec		lruvec;
-	struct zone_lru {
-		struct list_head list;
-	} lru[NR_LRU_LISTS];
 
 	struct zone_reclaim_stat reclaim_stat;
 

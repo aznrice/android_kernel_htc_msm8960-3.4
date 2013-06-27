@@ -2802,6 +2802,7 @@ static struct platform_device *common_devices[] __initdata = {
 #ifdef CONFIG_ION_MSM
 	&ion_dev,
 #endif
+	&msm8960_rpm_device,
 	&msm8960_rpm_log_device,
 	&msm8960_rpm_stat_device,
 #ifdef CONFIG_MSM_QDSS
@@ -3546,8 +3547,6 @@ static void __init ville_init(void)
 	ville_init_keypad();
 	hw_ver_id = readl(HW_VER_ID_VIRT);
 	printk(KERN_INFO "hw_ver_id = %x\n", hw_ver_id);
-
-	msm_pm_set_tz_retention_flag(1);
 }
 
 #define PHY_BASE_ADDR1  0x80400000

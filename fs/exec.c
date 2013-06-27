@@ -54,7 +54,6 @@
 #include <linux/fs_struct.h>
 #include <linux/pipe_fs_i.h>
 #include <linux/oom.h>
-#include <linux/ksm.h>
 #include <linux/compat.h>
 
 #include <asm/uaccess.h>
@@ -1175,6 +1174,7 @@ void setup_new_exec(struct linux_binprm * bprm)
 	   group */
 
 	current->self_exec_id++;
+			
 	flush_signal_handlers(current, 0);
 	flush_old_files(current->files);
 }
