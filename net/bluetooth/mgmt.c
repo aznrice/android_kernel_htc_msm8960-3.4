@@ -2838,7 +2838,7 @@ int mgmt_powered(u16 index, u8 powered)
 	return ret;
 }
 
-int mgmt_discoverable(struct hci_dev *hdev, u8 discoverable)
+int mgmt_discoverable(u16 index, u8 discoverable)
 {
 	struct mgmt_mode ev;
 	struct cmd_lookup match = { discoverable, NULL };
