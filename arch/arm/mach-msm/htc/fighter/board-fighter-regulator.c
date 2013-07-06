@@ -184,12 +184,10 @@ VREG_CONSUMERS(S4) = {
 };
 VREG_CONSUMERS(S5) = {
 	REGULATOR_SUPPLY("8921_s5",		NULL),
-	//	REGULATOR_SUPPLY("krait0",		"acpuclk-8960"),
 	REGULATOR_SUPPLY("krait0",		NULL),
 };
 VREG_CONSUMERS(S6) = {
 	REGULATOR_SUPPLY("8921_s6",		NULL),
-	//	REGULATOR_SUPPLY("krait1",		"acpuclk-8960"),
 	REGULATOR_SUPPLY("krait1",		NULL),
 };
 VREG_CONSUMERS(S7) = {
@@ -228,14 +226,6 @@ VREG_CONSUMERS(LVS6) = {
 };
 VREG_CONSUMERS(LVS7) = {
 	REGULATOR_SUPPLY("8921_lvs7",		NULL),
-};
-VREG_CONSUMERS(USB_OTG) = {
-	REGULATOR_SUPPLY("8921_usb_otg",	NULL),
-	REGULATOR_SUPPLY("vbus_otg",		"msm_otg"),
-};
-VREG_CONSUMERS(HDMI_MVS) = {
-	REGULATOR_SUPPLY("8921_hdmi_mvs",	NULL),
-	REGULATOR_SUPPLY("hdmi_mvs",		"hdmi_msm.0"),
 };
 VREG_CONSUMERS(NCP) = {
 	REGULATOR_SUPPLY("8921_ncp",		NULL),
@@ -316,12 +306,6 @@ VREG_CONSUMERS(EXT_3P3V) = {
 		_pull_down, _always_on, _supply_regulator, 0, _enable_time, \
 		_reg_id)
 
-#define PM8XXX_VS300(_id, _name, _always_on, _pull_down, _enable_time, \
-		_supply_regulator, _reg_id) \
-	PM8XXX_VREG_INIT(_id, _name, 0, 0, 0, REGULATOR_CHANGE_STATUS, 0, \
-		_pull_down, _always_on, _supply_regulator, 0, _enable_time, \
-		_reg_id)
-
 #define PM8XXX_NCP(_id, _name, _always_on, _min_uV, _max_uV, _enable_time, \
 		_supply_regulator, _reg_id) \
 	PM8XXX_VREG_INIT(_id, _name, _min_uV, _max_uV, 0, \
@@ -330,7 +314,7 @@ VREG_CONSUMERS(EXT_3P3V) = {
 
 /* Pin control initialization */
 #define PM8XXX_PC(_id, _name, _always_on, _pin_fn, _pin_ctrl, \
-		  _supply_regulator, _reg_id) \
+		_supply_regulator, _reg_id) \
 	{ \
 		.init_data = { \
 			.constraints = { \
@@ -501,12 +485,8 @@ msm_pm8921_regulator_pdata[] __devinitdata = {
 		0, 2),
 	PM8XXX_NLDO1200(L28, "8921_l28", 0, 1, 375000, 1050000, 200, "8921_s7",
 		0, 3),
-	PM8XXX_LDO(L29,      "8921_l29", 0, 1, 1800000, 1800000, 200, "8921_s8",
+	PM8XXX_LDO(L29,      "8921_l29", 0, 1, 2050000, 2100000, 200, "8921_s8",
 		0, 4),
-
-	/*	     ID        name      always_on pd en_t supply    reg_ID */
-	PM8XXX_VS300(USB_OTG,  "8921_usb_otg",  0, 0, 0,   "ext_5v", 5),
-	PM8XXX_VS300(HDMI_MVS, "8921_hdmi_mvs", 0, 1, 0,   "ext_5v", 6),
 };
 
 static struct rpm_regulator_init_data
@@ -526,18 +506,18 @@ msm_rpm_regulator_init_data[] __devinitdata = {
 	RPM_LDO(L5,	 0, 1, 0, 2950000, 2950000, NULL,      0, 0),
 	RPM_LDO(L6,	 0, 1, 0, 2850000, 2950000, NULL,      0, 0),
 	RPM_LDO(L7,	 1, 1, 0, 1850000, 2950000, NULL,      10000, 10000),
-	RPM_LDO(L8,	 0, 1, 0, 2800000, 2800000, NULL,      0, 0),
-	RPM_LDO(L9,	 0, 1, 0, 2800000, 2800000, NULL,      0, 0),
+	RPM_LDO(L8,	 0, 1, 0, 2800000, 3000000, NULL,      0, 0),
+	RPM_LDO(L9,	 0, 1, 0, 2800000, 2850000, NULL,      0, 0),
 	RPM_LDO(L10,	 0, 1, 0, 3000000, 3000000, NULL,      0, 0),
-	RPM_LDO(L11,	 0, 1, 0, 3000000, 3200000, NULL,      0, 0), 
-	RPM_LDO(L12,	 0, 1, 0, 1200000, 1500000, "8921_s4", 0, 0), 
+	RPM_LDO(L11,	 0, 1, 0, 3000000, 3000000, NULL,      0, 0),
+	RPM_LDO(L12,	 0, 1, 0, 1200000, 1500000, "8921_s4", 0, 0),
 	RPM_LDO(L14,	 0, 1, 0, 1800000, 1800000, NULL,      0, 0),
 	RPM_LDO(L15,	 0, 1, 0, 1800000, 2950000, NULL,      0, 0),
-	RPM_LDO(L16,	 0, 1, 0, 2850000, 3300000, NULL,      0, 0), 
-	RPM_LDO(L17,	 0, 1, 0, 2850000, 2850000, NULL,      0, 0),
+	RPM_LDO(L16,	 0, 1, 0, 2850000, 2850000, NULL,      0, 0),
+	RPM_LDO(L17,	 0, 1, 0, 1800000, 2950000, NULL,      0, 0),
 	RPM_LDO(L18,	 0, 1, 0, 1300000, 1300000, "8921_s4", 0, 0),
 	RPM_LDO(L21,	 0, 1, 0, 1900000, 1900000, "8921_s8", 0, 0),
-	RPM_LDO(L22,	 0, 1, 0, 2800000, 2800000, NULL,      0, 0),
+	RPM_LDO(L22,	 0, 1, 0, 2750000, 2750000, NULL,      0, 0),
 	RPM_LDO(L23,	 1, 1, 1, 1800000, 1800000, "8921_s8", 10000, 10000),
 	RPM_LDO(L24,	 0, 1, 1,  750000, 1150000, "8921_s1", 10000, 10000),
 	RPM_LDO(L25,	 1, 1, 0, 1225000, 1225000, "8921_s1", 10000, 10000),
