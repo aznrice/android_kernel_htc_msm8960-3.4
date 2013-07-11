@@ -3357,6 +3357,16 @@ struct platform_device msm8960_device_perf_lock = {
 };
 #endif
 
+static uint32_t gsbi2_gpio_table[] = {
+	GPIO_CFG(ELITE_GPIO_VP_I2C_DAT, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(ELITE_GPIO_VP_I2C_CLK, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+};
+
+static uint32_t gsbi2_gpio_table_gpio[] = {
+	GPIO_CFG(ELITE_GPIO_VP_I2C_DAT, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+	GPIO_CFG(ELITE_GPIO_VP_I2C_CLK, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
+};
+
 static uint32_t gsbi3_gpio_table[] = {
 	GPIO_CFG(ELITE_GPIO_TP_I2C_DAT, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
 	GPIO_CFG(ELITE_GPIO_TP_I2C_CLK, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_8MA),
@@ -3412,6 +3422,16 @@ static void gsbi_qup_i2c_gpio_config(int adap_id, int config_type)
 {
 	printk(KERN_INFO "%s(): adap_id = %d, config_type = %d \n", __func__, adap_id, config_type);
 
+	if ((adap_id == MSM_8960_GSBI2_QUP_I2C_BUS_ID) && (config_type == 1)) {
+		gpio_tlmm_config(gsbi2_gpio_table[0], GPIO_CFG_ENABLE);
+		gpio_tlmm_config(gsbi2_gpio_table[1], GPIO_CFG_ENABLE);
+	}
+
+	if ((adap_id == MSM_8960_GSBI2_QUP_I2C_BUS_ID) && (config_type == 0)) {
+		gpio_tlmm_config(gsbi2_gpio_table_gpio[0], GPIO_CFG_ENABLE);
+		gpio_tlmm_config(gsbi2_gpio_table_gpio[1], GPIO_CFG_ENABLE);
+	}
+
 	if ((adap_id == MSM_8960_GSBI3_QUP_I2C_BUS_ID) && (config_type == 1)) {
 		gpio_tlmm_config(gsbi3_gpio_table[0], GPIO_CFG_ENABLE);
 		gpio_tlmm_config(gsbi3_gpio_table[1], GPIO_CFG_ENABLE);
@@ -3464,6 +3484,12 @@ static void gsbi_qup_i2c_gpio_config(int adap_id, int config_type)
 	}
 }
 
+static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi2_pdata = {
+	.clk_freq = 100000,	
+	.src_clk_rate = 24000000,
+	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
+};
+
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi4_pdata = {
 	.clk_freq = 400000,
 	.src_clk_rate = 24000000,
@@ -3476,12 +3502,6 @@ static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi3_pdata = {
 	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
 };
 
-static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi5_pdata = {
-	.clk_freq = 100000,
-	.src_clk_rate = 24000000,
-	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
-};
-
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi8_pdata = {
 	.clk_freq = 400000,
 	.src_clk_rate = 24000000,
@@ -3490,6 +3510,12 @@ static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi8_pdata = {
 };
 
 static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi12_pdata = {
+	.clk_freq = 400000,
+	.src_clk_rate = 24000000,
+	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
+};
+
+static struct msm_i2c_platform_data msm8960_i2c_qup_gsbi5_pdata = {
 	.clk_freq = 400000,
 	.src_clk_rate = 24000000,
 	.msm_i2c_config_gpio = gsbi_qup_i2c_gpio_config,
@@ -3577,11 +3603,12 @@ static struct platform_device *common_devices[] __initdata = {
 	&msm_device_saw_core0,
 	&msm_device_saw_core1,
 	&msm8960_device_ext_5v_vreg,
+	&msm8960_device_qup_spi_gsbi10,
+	&msm8960_device_qup_i2c_gsbi2,
 	&msm8960_device_qup_i2c_gsbi3,
 	&msm8960_device_qup_i2c_gsbi4,
-	&msm8960_device_qup_i2c_gsbi5,
 	&msm8960_device_qup_i2c_gsbi8,
-	&msm8960_device_qup_spi_gsbi10,
+	&msm8960_device_qup_i2c_gsbi5,
 #ifndef CONFIG_MSM_DSPS
 	&msm8960_device_qup_i2c_gsbi12,
 #endif
@@ -3708,17 +3735,20 @@ static void __init msm8960_i2c_init(void)
 	msm8960_device_qup_i2c_gsbi4.dev.platform_data =
 					&msm8960_i2c_qup_gsbi4_pdata;
 
+	msm8960_device_qup_i2c_gsbi2.dev.platform_data =
+					&msm8960_i2c_qup_gsbi2_pdata;
+
 	msm8960_device_qup_i2c_gsbi3.dev.platform_data =
 					&msm8960_i2c_qup_gsbi3_pdata;
-
-	msm8960_device_qup_i2c_gsbi5.dev.platform_data =
-					&msm8960_i2c_qup_gsbi5_pdata;
 
 	msm8960_device_qup_i2c_gsbi8.dev.platform_data =
 					&msm8960_i2c_qup_gsbi8_pdata;
 
 	msm8960_device_qup_i2c_gsbi12.dev.platform_data =
 					&msm8960_i2c_qup_gsbi12_pdata;
+
+	msm8960_device_qup_i2c_gsbi5.dev.platform_data =
+					&msm8960_i2c_qup_gsbi5_pdata;
 }
 
 static void __init msm8960_gfx_init(void)

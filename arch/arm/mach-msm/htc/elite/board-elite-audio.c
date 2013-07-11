@@ -27,6 +27,7 @@
 #include <asm/mach-types.h>
 #include <mach/socinfo.h>
 #include <linux/mfd/wcd9xxx/core.h>
+#include <mach/htc_acoustic_8960.h>
 #include "../../../sound/soc/codecs/wcd9310.h"
 #include "../sound/soc/msm/msm-pcm-routing.h"
 #include "board-elite.h"
@@ -1730,6 +1731,29 @@ static struct snd_soc_card snd_soc_card_msm = {
 		.num_controls = ARRAY_SIZE(tabla_msm_controls),
 };
 
+int elite_get_component_info(void)
+{
+	int ret = 0;
+	uint32_t audio_hw_comp = HTC_AUDIO_A1028;
+
+	ret = gpio_request(ELITE_GPIO_NC_97, "audience_detect");
+	if (ret) {
+		pr_err("%s: Error requesting Audience Detection GPIO %u\n",
+			__func__, ELITE_GPIO_NC_97);
+		return audio_hw_comp;
+	}
+
+	if (gpio_get_value(ELITE_GPIO_NC_97))
+		audio_hw_comp &= (~HTC_AUDIO_A1028);
+
+	gpio_free(ELITE_GPIO_NC_97);
+	return audio_hw_comp;
+}
+
+static struct acoustic_ops acoustic = {
+	 .get_hw_component = elite_get_component_info,
+};
+
 static struct platform_device *msm_snd_device;
 static struct platform_device *msm_snd_tabla1x_device;
 
@@ -1785,6 +1809,7 @@ static int __init elite_audio_init(void)
 
 	mutex_init(&cdc_mclk_mutex);
 
+	acoustic_register_ops(&acoustic);
 	return ret;
 
 }
