@@ -57,10 +57,10 @@
 #define RAWCHIP_IOCTL_SET_DXOPRC_AF_STRATEGY \
 	_IOW(RAWCHIP_IOCTL_MAGIC, 6, struct rawchip_stats_event_ctrl *)
 
-#define RAWCHIP_IOCTL_GET_DXOPRC_VER \
+#define RAWCHIP_IOCTL_GET_DXOPRC_VER\
 	_IOW(RAWCHIP_IOCTL_MAGIC, 7, struct rawchip_stats_event_ctrl *)
 	
-#define RAWCHIP_IOCTL_GET_DXOPRC_FRAMESETTING \
+#define RAWCHIP_IOCTL_GET_DXOPRC_FRAMESETTING\
 	_IOW(RAWCHIP_IOCTL_MAGIC, 8, struct rawchip_stats_event_ctrl *)
 	
 typedef struct
@@ -98,5 +98,5 @@ struct rawchip_stats_event_ctrl {
 	void *data;
 };
 
-#endif /* __LINUX_RAWCHIP_H */
+#endif 
 

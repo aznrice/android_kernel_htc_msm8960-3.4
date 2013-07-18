@@ -19,11 +19,14 @@
 #define HTC_AUDIO_TPA2026	0x02
 #define HTC_AUDIO_TPA2028	0x04
 #define HTC_AUDIO_A1028		0x08
+#define HTC_AUDIO_TPA6185 (HTC_AUDIO_A1028 << 1)
+#define HTC_AUDIO_RT5501 (HTC_AUDIO_TPA6185 << 1)
 
 struct acoustic_ops {
 	void (*set_q6_effect)(int mode);
 	int (*get_htc_revision)(void);
 	int (*get_hw_component)(void);
+	int (*enable_digital_mic)(void);
 };
 
 void acoustic_register_ops(struct acoustic_ops *ops);

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,7 +25,7 @@
 #include <linux/mfd/pmic8058.h>
 #include <linux/mfd/pmic8901.h>
 #include <linux/mfd/pm8xxx/misc.h>
-#include <linux/sched.h>
+#include <linux/gpio.h>
 #include <linux/console.h>
 
 #include <asm/mach-types.h>
@@ -36,15 +36,11 @@
 #include <mach/irqs.h>
 #include <mach/scm.h>
 #include <mach/board_htc.h>
-#include <mach/mdm.h>
-#include <mach/msm_watchdog.h>
-#include <mach/subsystem_restart.h>
-#include "timer.h"
-#include <mach/pm.h>
+#include <mach/htc_restart_handler.h>
+
+#include "msm_watchdog.h"
 #include "smd_private.h"
-#if defined(CONFIG_MSM_RMT_STORAGE_CLIENT)
-#include <linux/rmt_storage_client.h>
-#endif
+#include "timer.h"
 
 #define WDT0_RST	0x38
 #define WDT0_EN		0x40
@@ -56,72 +52,37 @@
 #define RESTART_REASON_ADDR 0xF00
 #define DLOAD_MODE_ADDR     0x0
 
-#define MSM_REBOOT_REASON_BASE	(MSM_IMEM_BASE + RESTART_REASON_ADDR)
-#define SZ_DIAG_ERR_MSG 0xC8
-
 #define SCM_IO_DISABLE_PMIC_ARBITER	1
 
+#ifdef CONFIG_LGE_CRASH_HANDLER
+#define LGE_ERROR_HANDLER_MAGIC_NUM	0xA97F2C46
+#define LGE_ERROR_HANDLER_MAGIC_ADDR	0x18
+void *lge_error_handler_cookie_addr;
+static int ssr_magic_number = 0;
+#endif
+
 static int restart_mode;
-
-struct htc_reboot_params {
-	unsigned reboot_reason;
-	unsigned radio_flag;
-	char reserved[256 - SZ_DIAG_ERR_MSG - 8];
-	char msg[SZ_DIAG_ERR_MSG];
-};
-
-static struct htc_reboot_params *reboot_params;
+void *restart_reason;
+int ramdump_source=0;
 
 int pmic_reset_irq;
 static void __iomem *msm_tmr0_base;
 
+#ifdef CONFIG_MACH_HTC
 static int notify_efs_sync = 0;
 static int notify_efs_sync_set(const char *val, struct kernel_param *kp);
 module_param_call(notify_efs_sync, notify_efs_sync_set, param_get_int,
-			&notify_efs_sync, 0644);
+		&notify_efs_sync, 0644);
 
 static void check_efs_sync_work(struct work_struct *work);
 static DECLARE_DELAYED_WORK(checkwork_struct, check_efs_sync_work);
+#endif
 
-#ifdef CONFIG_MSM_DLOAD_MODE
 static int in_panic;
-static void *dload_mode_addr;
-
-/* Flag to check if current reboot will enter ramdump */
-static int ramdump_reboot;
-
-/* Download mode master kill-switch */
-static int dload_set(const char *val, struct kernel_param *kp);
-void set_ramdump_reason(const char *msg);
-static int download_mode = 1;
-module_param_call(download_mode, dload_set, param_get_int,
-			&download_mode, 0644);
-
-
-int check_in_panic(void)
-{
-	return in_panic;
-}
-
-int ramdump_source=0;
-
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
-	/* Prepare a buffer whose size is equal to htc_reboot_params->msg */
-	char kernel_panic_msg[SZ_DIAG_ERR_MSG] = "Kernel Panic";
 	in_panic = 1;
-
-	/* ptr is a buffer declared in panic function. It's never be NULL.
-	   Reserve one space for trailing zero.
-	*/
-	if (ptr)
-		snprintf(kernel_panic_msg, SZ_DIAG_ERR_MSG-1, "KP: %s", (char *)ptr);
-
-	/* Do not set KP restart reason if subsystems have set one already */
-	if (!ssr_have_set_restart_reason)
-		set_ramdump_reason(kernel_panic_msg);
-
 	return NOTIFY_DONE;
 }
 
@@ -129,17 +90,27 @@ static struct notifier_block panic_blk = {
 	.notifier_call	= panic_prep_restart,
 };
 
+#ifdef CONFIG_MSM_DLOAD_MODE
+static void *dload_mode_addr;
+
+/* Download mode master kill-switch */
+static int dload_set(const char *val, struct kernel_param *kp);
+static int download_mode = 1;
+module_param_call(download_mode, dload_set, param_get_int,
+			&download_mode, 0644);
+
 static void set_dload_mode(int on)
 {
-/* Disable QCT dload mode as HTC has our own dload mechanism. */
-#if 0
 	if (dload_mode_addr) {
 		__raw_writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		__raw_writel(on ? 0xCE14091A : 0,
 		       dload_mode_addr + sizeof(unsigned int));
+#ifdef CONFIG_LGE_CRASH_HANDLER
+		__raw_writel(on ? LGE_ERROR_HANDLER_MAGIC_NUM : 0,
+				lge_error_handler_cookie_addr);
+#endif
 		mb();
 	}
-#endif
 }
 
 static int dload_set(const char *val, struct kernel_param *kp)
@@ -159,6 +130,9 @@ static int dload_set(const char *val, struct kernel_param *kp)
 	}
 
 	set_dload_mode(download_mode);
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	ssr_magic_number = 0;
+#endif
 
 	return 0;
 }
@@ -169,81 +143,36 @@ static int dload_set(const char *val, struct kernel_param *kp)
 void msm_set_restart_mode(int mode)
 {
 	restart_mode = mode;
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	if (download_mode == 1 && (mode & 0xFFFF0000) == 0x6D630000)
+		panic("LGE crash handler detected panic");
+#endif
 }
 EXPORT_SYMBOL(msm_set_restart_mode);
-static atomic_t restart_counter = ATOMIC_INIT(0);
-static int modem_cache_flush_done;
 
-inline void notify_modem_cache_flush_done(void)
+#ifdef CONFIG_MACH_HTC
+static void msm_flush_console(void)
 {
-	modem_cache_flush_done = 1;
-}
-
- unsigned get_restart_reason(void)
-{
-	return reboot_params->reboot_reason;
-}
-EXPORT_SYMBOL(get_restart_reason);
-
-/*
-   This function should not be called outside
-   to ensure that others do not change restart reason.
-   Use mode & cmd to set reason & msg in arch_reset().
-*/
-static inline void set_restart_reason(unsigned int reason)
-{
-	reboot_params->reboot_reason = reason;
-}
-
-/*
-   This function should not be called outsite
-   to ensure that others do no change restart reason.
-   Use mode & cmd to set reason & msg in arch_reset().
-*/
-static inline void set_restart_msg(const char *msg)
-{
-	strncpy(reboot_params->msg, msg, sizeof(reboot_params->msg)-1);
-}
-
-static bool console_flushed;
-
-static void msm_pm_flush_console(void)
-{
-	if (console_flushed)
-		return;
-	console_flushed = true;
+	unsigned long flags;
 
 	printk("\n");
 	printk(KERN_EMERG "[K] Restarting %s\n", linux_banner);
-	if (!console_trylock()) {
+	if (console_trylock()) {
 		console_unlock();
 		return;
 	}
 
 	mdelay(50);
 
-	local_irq_disable();
+	local_irq_save(flags);
+
 	if (console_trylock())
 		printk(KERN_EMERG "[K] restart: Console was locked! Busting\n");
 	else
 		printk(KERN_EMERG "[K] restart: Console was locked!\n");
 	console_unlock();
-}
 
-/* This function expose others to restart message for entering ramdump mode. */
-void set_ramdump_reason(const char *msg)
-{
-	/* Only allow write msg before entering arch_rest, unless
-	 * device met fatal while performing normal reboot.
-	 */
-	if (atomic_read(&restart_counter) != 0 &&
-		ramdump_reboot)
-		return;
-
-	set_restart_reason(RESTART_REASON_RAMDUMP);
-	set_restart_msg(msg? msg: "");
-	/* Ramdump reason has been set, disallow any subsequent setting */
-	ramdump_reboot = 1;
+	local_irq_restore(flags);
 }
 
 static void set_modem_efs_sync(void)
@@ -258,7 +187,6 @@ static int check_modem_efs_sync(void)
 }
 
 static int efs_sync_work_timout;
-
 static void check_efs_sync_work(struct work_struct *work)
 {
 	if (--efs_sync_work_timout > 0 && !check_modem_efs_sync()) {
@@ -282,9 +210,6 @@ static void notify_modem_efs_sync_schedule(unsigned timeout)
 static void check_modem_efs_sync_timeout(unsigned timeout)
 {
 	while (timeout > 0 && !check_modem_efs_sync()) {
-		/* Kick watchdog.
-		   Do not assume efs sync will be executed.
-		   Assume watchdog timeout is default 4 seconds. */
 		writel(1, msm_tmr0_base + WDT0_RST);
 		mdelay(1000);
 		timeout--;
@@ -300,7 +225,6 @@ static int notify_efs_sync_set(const char *val, struct kernel_param *kp)
 	int ret;
 	int old_val = notify_efs_sync;
 
-	/* Only allow one instace of efs_sync at the same time */
 	if (old_val == 1)
 		return -EINVAL;
 
@@ -309,7 +233,6 @@ static int notify_efs_sync_set(const char *val, struct kernel_param *kp)
 	if (ret)
 		return ret;
 
-	/* If notify_efs_sync is not one, ignore. */
 	if (notify_efs_sync != 1) {
 		notify_efs_sync = 0;
 		return -EINVAL;
@@ -320,33 +243,49 @@ static int notify_efs_sync_set(const char *val, struct kernel_param *kp)
 	return 0;
 }
 
+static int notify_efs_sync_call
+	(struct notifier_block *this, unsigned long code, void *_cmd)
+{
+	unsigned long oem_code = 0;
+
+	switch (code) {
+		case SYS_RESTART:
+			if (_cmd && !strncmp(_cmd, "oem-", 4)) {
+				oem_code = simple_strtoul(_cmd + 4, 0, 16) & 0xff;
+			}
+
+			if (board_mfg_mode() <= 2) {
+				if (oem_code != 0x11) {
+					set_modem_efs_sync();
+					check_modem_efs_sync_timeout(10);
+				}
+			}
+
+		case SYS_POWER_OFF:
+			if (notify_efs_sync) {
+				pr_info("%s: userspace initiated efs_sync not finished...\n", __func__);
+				cancel_delayed_work(&checkwork_struct);
+				check_modem_efs_sync_timeout(efs_sync_work_timout - 1);
+			}
+			break;
+	}
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block notify_efs_sync_notifier = {
+   .notifier_call = notify_efs_sync_call,
+};
+#endif
+
 static void __msm_power_off(int lower_pshold)
 {
 	printk(KERN_CRIT "[K] Powering off the SoC\n");
 #ifdef CONFIG_MSM_DLOAD_MODE
 	set_dload_mode(0);
 #endif
-
-	/* Check if userspace initiated efs_sync is done */
-	if (notify_efs_sync) {
-		/* Cancel check worker */
-		pr_info("%s: userspace initiated efs_sync not finished...\n", __func__);
-		cancel_delayed_work(&checkwork_struct);
-		/* Change to busy wait for whichever seconds left */
-		check_modem_efs_sync_timeout(efs_sync_work_timout);
-	}
-
-	if (cpu_is_msm8x60()) {
-		pm8058_reset_pwr_off(0);
-		pm8901_reset_pwr_off(0);
-	}
-
-#ifdef CONFIG_ARCH_MSM8960
-	if (pm8xxx_reset_pwr_off(0))
-		panic("pm8xxx_reset_pwr_off fail");
-#else
 	pm8xxx_reset_pwr_off(0);
-#endif
+
 	if (lower_pshold) {
 		__raw_writel(0, PSHOLD_CTL_SU);
 		mdelay(10000);
@@ -391,7 +330,7 @@ static void cpu_power_off(void *data)
 
 static irqreturn_t resout_irq_handler(int irq, void *dev_id)
 {
-	pr_warn("[K] %s PMIC Initiated shutdown\n", __func__);
+	pr_warn("%s PMIC Initiated shutdown\n", __func__);
 	oops_in_progress = 1;
 	smp_call_function_many(cpu_online_mask, cpu_power_off, NULL, 0);
 	if (smp_processor_id() == 0)
@@ -402,21 +341,50 @@ static irqreturn_t resout_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-inline void soc_restart(char mode, const char *cmd)
+#ifdef CONFIG_LGE_CRASH_HANDLER
+#define SUBSYS_NAME_MAX_LENGTH	40
+
+int get_ssr_magic_number(void)
 {
-	arm_pm_restart(mode, cmd);
+	return ssr_magic_number;
 }
 
-void arch_reset(char mode, const char *cmd)
+void set_ssr_magic_number(const char* subsys_name)
 {
-	unsigned long oem_code = 0;
+	int i;
+	const char *subsys_list[] = {
+		"modem", "riva", "dsps", "lpass",
+		"external_modem", "gss",
+	};
 
-	/* arch_reset should only enter once*/
-	if (atomic_add_return(1, &restart_counter) != 1)
-		return;
+	ssr_magic_number = (0x6d630000 | 0x0000f000);
+
+	for (i=0; i < ARRAY_SIZE(subsys_list); i++) {
+		if (!strncmp(subsys_list[i], subsys_name,
+					SUBSYS_NAME_MAX_LENGTH)) {
+			ssr_magic_number = (0x6d630000 | ((i+1)<<12));
+			break;
+		}
+	}
+}
+
+void set_kernel_crash_magic_number(void)
+{
+	pet_watchdog();
+	if (ssr_magic_number == 0)
+		__raw_writel(0x6d630100, restart_reason);
+	else
+		__raw_writel(restart_mode, restart_reason);
+}
+#endif /* CONFIG_LGE_CRASH_HANDLER */
+
+void msm_restart(char mode, const char *cmd)
+{
+#ifdef CONFIG_MACH_HTC
+	unsigned long oem_code = 0;
+#endif
 
 #ifdef CONFIG_MSM_DLOAD_MODE
-
 	/* This looks like a normal reboot at this point. */
 	set_dload_mode(0);
 
@@ -424,8 +392,13 @@ void arch_reset(char mode, const char *cmd)
 	set_dload_mode(in_panic);
 
 	/* Write download mode flags if restart_mode says so */
-	if (restart_mode == RESTART_DLOAD)
+	if (restart_mode == RESTART_DLOAD) {
 		set_dload_mode(1);
+#ifdef CONFIG_LGE_CRASH_HANDLER
+		writel(0x6d63c421, restart_reason);
+		goto reset;
+#endif
+	}
 
 	/* Kill download mode if master-kill switch is set */
 	if (!download_mode)
@@ -433,86 +406,64 @@ void arch_reset(char mode, const char *cmd)
 #endif
 
 	printk(KERN_NOTICE "[K] Going down for restart now\n");
-	printk(KERN_NOTICE "[K] %s: mode %d\n", __func__, mode);
-	if (cmd) {
-		printk(KERN_NOTICE "[K] %s: restart command `%s'.\n", __func__, cmd);
-		/* XXX: modem will set msg itself.
-			Dying msg should be passed to this function directly. */
-		if (mode != RESTART_MODE_MODEM_CRASH)
-			set_restart_msg(cmd);
-	} else
-		printk(KERN_NOTICE "[K] %s: no command restart.\n", __func__);
 
-	if (cpu_is_msm8x60())
-		pm8058_reset_pwr_off(1);
-#ifdef CONFIG_ARCH_MSM8960
-	if (pm8xxx_reset_pwr_off(1)) {
-		in_panic = 1;
-	}
-#else
+	printk(KERN_NOTICE "%s: Kernel command line: %s\n", __func__, saved_command_line);
+
 	pm8xxx_reset_pwr_off(1);
-#endif
 
+	pr_info("[K] %s: restart by command: [%s]\r\n", __func__, (cmd) ? cmd : "");
+
+#ifdef CONFIG_MACH_HTC
 	if (in_panic) {
-		/* Reason & message are set in panic notifier, panic_prep_restart.
-		   Kernel panic is a top priority.
-		   Keep this condition to avoid the reason and message being modified. */
+
 	} else if (!cmd) {
-		set_restart_reason(RESTART_REASON_REBOOT);
+		set_restart_action(RESTART_REASON_REBOOT, NULL);
 	} else if (!strncmp(cmd, "bootloader", 10)) {
-		set_restart_reason(RESTART_REASON_BOOTLOADER);
+		set_restart_action(RESTART_REASON_BOOTLOADER, NULL);
 	} else if (!strncmp(cmd, "recovery", 8)) {
-		set_restart_reason(RESTART_REASON_RECOVERY);
+		set_restart_action(RESTART_REASON_RECOVERY, NULL);
 	} else if (!strcmp(cmd, "eraseflash")) {
-		set_restart_reason(RESTART_REASON_ERASE_FLASH);
+		set_restart_action(RESTART_REASON_ERASE_FLASH, NULL);
 	} else if (!strncmp(cmd, "oem-", 4)) {
-		oem_code = simple_strtoul(cmd + 4, 0, 16) & 0xff;
-
-		/* oem-94, 95, 96, 97, 98, 99 are RIL fatal */
-		if ((oem_code == 0x94) || (oem_code == 0x95) || (oem_code == 0x96) || (oem_code == 0x97) || (oem_code == 0x98)) {
-			oem_code = 0x99;
-			/* RIL fatals will enter ramdump */
-			ramdump_reboot = 1;
-		}
-
-		set_restart_reason(RESTART_REASON_OEM_BASE | oem_code);
+		oem_code = simple_strtoul(cmd + 4, NULL, 16) & 0xff;
+		set_restart_to_oem(oem_code, NULL);
 	} else if (!strcmp(cmd, "force-hard") ||
-			(RESTART_MODE_LEGECY < mode && mode < RESTART_MODE_MAX)
-		) {
-		/* The only situation modem user triggers reset is NV restore after erasing EFS. */
+			(RESTART_MODE_LEGACY < mode && mode < RESTART_MODE_MAX)
+			) {
 		if (mode == RESTART_MODE_MODEM_USER_INVOKED)
-			set_restart_reason(RESTART_REASON_REBOOT);
-		else if (mode == RESTART_MODE_ERASE_EFS)
-			set_restart_reason(RESTART_REASON_ERASE_EFS);
+			set_restart_action(RESTART_REASON_REBOOT, NULL);
 		else {
-			set_restart_reason(RESTART_REASON_RAMDUMP);
-			/* Force hards will also enter ramdump */
-			ramdump_reboot = 1;
+			set_restart_action(RESTART_REASON_RAMDUMP, cmd);
 		}
 	} else {
-		/* unknown command */
-		set_restart_reason(RESTART_REASON_REBOOT);
+		set_restart_action(RESTART_REASON_REBOOT, NULL);
 	}
-
-	/* boot mode: 0 - normal, 1 - factory2, 2 - recovery */
-	if (mode != RESTART_MODE_MODEM_CRASH && board_mfg_mode() <= 2) {
-		/* oem-11 is userspace-triggered reboot */
-		if (oem_code != 0x11) {
-			set_modem_efs_sync();
-			check_modem_efs_sync_timeout(10);
+#else
+	if (cmd != NULL) {
+		if (!strncmp(cmd, "bootloader", 10)) {
+			__raw_writel(0x77665500, restart_reason);
+		} else if (!strncmp(cmd, "recovery", 8)) {
+			__raw_writel(0x77665502, restart_reason);
+		} else if (!strncmp(cmd, "oem-", 4)) {
+			unsigned long code;
+			code = simple_strtoul(cmd + 4, NULL, 16) & 0xff;
+			__raw_writel(0x6f656d00 | code, restart_reason);
+		} else {
+			__raw_writel(0x77665501, restart_reason);
 		}
+	} else {
+		__raw_writel(0x77665501, restart_reason);
 	}
+#endif
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	if (in_panic == 1)
+		set_kernel_crash_magic_number();
+reset:
+#endif /* CONFIG_LGE_CRASH_HANDLER */
 
-	/* Check if userspace initiated efs_sync is done */
-	if (notify_efs_sync) {
-		/* Cancel check worker */
-		pr_info("%s: userspace initiated efs_sync not finished...\n", __func__);
-		cancel_delayed_work(&checkwork_struct);
-		/* Change to busy wait for whichever seconds left */
-		check_modem_efs_sync_timeout(efs_sync_work_timout - 1);
-	}
-
-	msm_pm_flush_console();
+#ifdef CONFIG_MACH_HTC
+	msm_flush_console();
+#endif
 
 	__raw_writel(0, msm_tmr0_base + WDT0_EN);
 	if (!(machine_is_msm8x60_fusion() || machine_is_msm8x60_fusn_ffa())) {
@@ -521,6 +472,8 @@ void arch_reset(char mode, const char *cmd)
 		mdelay(5000);
 		pr_notice("[K] PS_HOLD didn't work, falling back to watchdog\n");
 	}
+
+	pr_info("[K] %s: Restarting by watchdog\r\n", __func__);
 
 	__raw_writel(1, msm_tmr0_base + WDT0_RST);
 	__raw_writel(5*0x31F3, msm_tmr0_base + WDT0_BARK_TIME);
@@ -531,25 +484,14 @@ void arch_reset(char mode, const char *cmd)
 	printk(KERN_ERR "[K] Restarting has failed\n");
 }
 
-
-static int __init msm_restart_init(void)
+static int __init msm_pmic_restart_init(void)
 {
 	int rc;
-	arm_pm_restart = arch_reset;
 
-#ifdef CONFIG_MSM_DLOAD_MODE
-	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
-	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
-
-	/* Reset detection is switched on below.*/
-	set_dload_mode(1);
+#ifdef CONFIG_MACH_HTC
+	htc_restart_handler_init();
+	register_reboot_notifier(&notify_efs_sync_notifier);
 #endif
-	msm_tmr0_base = msm_timer_get_timer0_base();
-	reboot_params = (void *)MSM_REBOOT_REASON_BASE;
-	memset(reboot_params, 0x0, sizeof(struct htc_reboot_params));
-	set_restart_reason(RESTART_REASON_RAMDUMP);
-	set_restart_msg("Unknown");
-	reboot_params->radio_flag = get_radio_flag();
 
 	if (pmic_reset_irq != 0) {
 		rc = request_any_context_irq(pmic_reset_irq,
@@ -561,8 +503,29 @@ static int __init msm_restart_init(void)
 		pr_warn("no pmic restart interrupt specified\n");
 	}
 
-	pm_power_off = msm_power_off;
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	__raw_writel(0x6d63ad00, restart_reason);
+#endif
+
 	return 0;
 }
 
-late_initcall(msm_restart_init);
+late_initcall(msm_pmic_restart_init);
+
+static int __init msm_restart_init(void)
+{
+	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+#ifdef CONFIG_MSM_DLOAD_MODE
+	dload_mode_addr = MSM_IMEM_BASE + DLOAD_MODE_ADDR;
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	lge_error_handler_cookie_addr = MSM_IMEM_BASE +
+		LGE_ERROR_HANDLER_MAGIC_ADDR;
+#endif
+	set_dload_mode(download_mode);
+#endif
+	msm_tmr0_base = msm_timer_get_timer0_base();
+	pm_power_off = msm_power_off;
+
+	return 0;
+}
+early_initcall(msm_restart_init);

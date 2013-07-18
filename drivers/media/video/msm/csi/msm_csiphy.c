@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/clk.h>
 #include <linux/io.h>
@@ -24,7 +25,6 @@
 
 #define V4L2_IDENT_CSIPHY                        50003
 
-/*MIPI CSI PHY registers*/
 #define MIPI_CSIPHY_LNn_CFG1_ADDR                0x0
 #define MIPI_CSIPHY_LNn_CFG2_ADDR                0x4
 #define MIPI_CSIPHY_LNn_CFG3_ADDR                0x8
@@ -65,9 +65,12 @@ int msm_csiphy_config(struct csiphy_cfg_params *cfg_params)
 	void __iomem *csiphybase;
 	csiphy_dev = v4l2_get_subdevdata(cfg_params->subdev);
 	csiphybase = csiphy_dev->base;
+	if (csiphybase == NULL)
+		return -ENOMEM;
+	
 	csiphy_params = cfg_params->parms;
 	if (csiphy_params->lane_cnt < 1 || csiphy_params->lane_cnt > 4) {
-		pr_err("%s: unsupported lane cnt %d\n",
+		CDBG("%s: unsupported lane cnt %d\n",
 			__func__, csiphy_params->lane_cnt);
 		return rc;
 	}
@@ -79,21 +82,14 @@ int msm_csiphy_config(struct csiphy_cfg_params *cfg_params)
 	msm_io_w(0x1, csiphybase + MIPI_CSIPHY_T_WAKEUP_CFG0_ADDR);
 
 	for (i = 0; i < csiphy_params->lane_cnt; i++) {
-		msm_io_w(0x00, csiphybase + MIPI_CSIPHY_LNn_CFG1_ADDR + 0x40*i);
-		msm_io_w(0x5F, csiphybase + MIPI_CSIPHY_LNn_CFG2_ADDR + 0x40*i);
+		msm_io_w(0x10, csiphybase + MIPI_CSIPHY_LNn_CFG2_ADDR + 0x40*i);
 		msm_io_w(csiphy_params->settle_cnt,
 			csiphybase + MIPI_CSIPHY_LNn_CFG3_ADDR + 0x40*i);
-		msm_io_w(0x00000052,
-			csiphybase + MIPI_CSIPHY_LNn_CFG5_ADDR + 0x40*i);
 	}
 
-	msm_io_w(0x00000000, csiphybase + MIPI_CSIPHY_LNCK_CFG1_ADDR);
-	msm_io_w(0x5F, csiphybase + MIPI_CSIPHY_LNCK_CFG2_ADDR);
+	msm_io_w(0x10, csiphybase + MIPI_CSIPHY_LNCK_CFG2_ADDR);
 	msm_io_w(csiphy_params->settle_cnt,
 			 csiphybase + MIPI_CSIPHY_LNCK_CFG3_ADDR);
-	msm_io_w(0x5, csiphybase + MIPI_CSIPHY_LNCK_CFG4_ADDR);
-	msm_io_w(0x2, csiphybase + MIPI_CSIPHY_LNCK_CFG5_ADDR);
-	msm_io_w(0x0, csiphybase + 0x128);
 
 	msm_io_w(0x24,
 		csiphybase + MIPI_CSIPHY_INTERRUPT_MASK0_ADDR);
@@ -115,19 +111,19 @@ static irqreturn_t msm_csiphy_irq(int irq_num, void *data)
 	struct csiphy_device *csiphy_dev = data;
 	irq = msm_io_r(csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_STATUS0_ADDR);
 	msm_io_w(irq, csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_CLEAR0_ADDR);
-	pr_info("%s MIPI_CSIPHY_INTERRUPT_STATUS0 = 0x%x\n", __func__, irq);
+	CDBG("%s MIPI_CSIPHY_INTERRUPT_STATUS0 = 0x%x\n", __func__, irq);
 	irq = msm_io_r(csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_STATUS1_ADDR);
 	msm_io_w(irq, csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_CLEAR1_ADDR);
-	pr_info("%s MIPI_CSIPHY_INTERRUPT_STATUS1 = 0x%x\n", __func__, irq);
+	CDBG("%s MIPI_CSIPHY_INTERRUPT_STATUS1 = 0x%x\n", __func__, irq);
 	irq = msm_io_r(csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_STATUS2_ADDR);
 	msm_io_w(irq, csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_CLEAR2_ADDR);
-	pr_info("%s MIPI_CSIPHY_INTERRUPT_STATUS2 = 0x%x\n", __func__, irq);
+	CDBG("%s MIPI_CSIPHY_INTERRUPT_STATUS2 = 0x%x\n", __func__, irq);
 	irq = msm_io_r(csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_STATUS3_ADDR);
 	msm_io_w(irq, csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_CLEAR3_ADDR);
-	pr_info("%s MIPI_CSIPHY_INTERRUPT_STATUS3 = 0x%x\n", __func__, irq);
+	CDBG("%s MIPI_CSIPHY_INTERRUPT_STATUS3 = 0x%x\n", __func__, irq);
 	irq = msm_io_r(csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_STATUS4_ADDR);
 	msm_io_w(irq, csiphy_dev->base + MIPI_CSIPHY_INTERRUPT_CLEAR4_ADDR);
-	pr_info("%s MIPI_CSIPHY_INTERRUPT_STATUS4 = 0x%x\n", __func__, irq);
+	CDBG("%s MIPI_CSIPHY_INTERRUPT_STATUS4 = 0x%x\n", __func__, irq);
 	msm_io_w(0x1, csiphy_dev->base + 0x164);
 	msm_io_w(0x0, csiphy_dev->base + 0x164);
 	return IRQ_HANDLED;
@@ -169,6 +165,7 @@ static int msm_csiphy_init(struct v4l2_subdev *sd)
 
 	if (rc < 0) {
 		iounmap(csiphy_dev->base);
+		csiphy_dev->base = NULL;
 		return rc;
 	}
 
@@ -198,6 +195,7 @@ static int msm_csiphy_release(struct v4l2_subdev *sd)
 	disable_irq(csiphy_dev->irq->start);
 #endif
 	iounmap(csiphy_dev->base);
+	csiphy_dev->base = NULL;
 	return 0;
 }
 
@@ -219,6 +217,7 @@ static long msm_csiphy_subdev_ioctl(struct v4l2_subdev *sd,
 		return -ENOIOCTLCMD;
 	}
 }
+static const struct v4l2_subdev_internal_ops msm_csiphy_internal_ops;
 
 static struct v4l2_subdev_core_ops msm_csiphy_subdev_core_ops = {
 	.g_chip_ident = &msm_csiphy_subdev_g_chip_ident,
@@ -241,6 +240,11 @@ static int __devinit csiphy_probe(struct platform_device *pdev)
 	}
 
 	v4l2_subdev_init(&new_csiphy_dev->subdev, &msm_csiphy_subdev_ops);
+	new_csiphy_dev->subdev.internal_ops = &msm_csiphy_internal_ops;
+	new_csiphy_dev->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	snprintf(new_csiphy_dev->subdev.name,
+			ARRAY_SIZE(new_csiphy_dev->subdev.name), "msm_csiphy");
+	
 	v4l2_set_subdevdata(&new_csiphy_dev->subdev, new_csiphy_dev);
 	platform_set_drvdata(pdev, &new_csiphy_dev->subdev);
 
@@ -280,6 +284,9 @@ static int __devinit csiphy_probe(struct platform_device *pdev)
 	disable_irq(new_csiphy_dev->irq->start);
 
 	new_csiphy_dev->pdev = pdev;
+	
+	msm_cam_register_subdev_node(
+		&new_csiphy_dev->subdev, CSIPHY_DEV, pdev->id);
 	return 0;
 
 csiphy_no_resource:

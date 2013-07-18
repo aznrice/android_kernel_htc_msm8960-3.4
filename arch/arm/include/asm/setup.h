@@ -18,6 +18,11 @@
 
 #define COMMAND_LINE_SIZE 1024
 
+#ifdef CONFIG_MACH_HTC
+/* information about the system we're running on */
+extern unsigned int system_rev;
+#endif
+
 /* The list ends with an ATAG_NONE node. */
 #define ATAG_NONE	0x00000000
 
@@ -143,12 +148,13 @@ struct tag_memclk {
 	__u32 fmemclk;
 };
 
-/* Light sensor calibration value */
+#ifdef CONFIG_MACH_HTC
 #define ATAG_ALS	0x5441001b
 
 struct tag_als_kadc {
 	__u32 kadc;
 };
+#endif
 
 struct tag {
 	struct tag_header hdr;
@@ -162,7 +168,10 @@ struct tag {
 		struct tag_revision	revision;
 		struct tag_videolfb	videolfb;
 		struct tag_cmdline	cmdline;
+#ifdef CONFIG_MACH_HTC
 		struct tag_als_kadc als_kadc;
+#endif
+
 		/*
 		 * Acorn specific
 		 */
@@ -194,12 +203,12 @@ struct tagtable {
 
 #define __tag __used __attribute__((__section__(".taglist.init")))
 #define __tagtable(tag, fn) \
-static struct tagtable __tagtable_##fn __tag = { tag, fn }
+static const struct tagtable __tagtable_##fn __tag = { tag, fn }
 
 /*
  * Memory map description
  */
-#define NR_BANKS 8
+#define NR_BANKS	CONFIG_ARM_NR_BANKS
 
 struct membank {
 	phys_addr_t start;

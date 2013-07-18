@@ -4,7 +4,7 @@
  *  FM HCI_SMD ( FM HCI Shared Memory Driver) is Qualcomm's Shared memory driver
  *  for the HCI protocol. This file is based on drivers/bluetooth/hci_vhci.c
  *
- *  Copyright (c) 2000-2001, 2011-2012 Code Aurora Forum. All rights reserved.
+ *  Copyright (c) 2000-2001, 2011-2012 The Linux Foundation. All rights reserved.
  *
  *  Copyright (C) 2002-2003  Maxim Krasnyansky <maxk@qualcomm.com>
  *  Copyright (C) 2004-2006  Marcel Holtmann <marcel@holtmann.org>
@@ -56,14 +56,14 @@ static void radio_hci_smd_recv_event(unsigned long temp)
 	while (len) {
 		skb = alloc_skb(len, GFP_ATOMIC);
 		if (!skb) {
-			PR_FM_ERR("Memory not allocated for the socket");
+			FMDERR("Memory not allocated for the socket");
 			return;
 		}
 
 		buf = kmalloc(len, GFP_ATOMIC);
 		if (!buf) {
 			kfree_skb(skb);
-			PR_FM_ERR("Error in allocating buffer memory");
+			FMDERR("Error in allocating buffer memory");
 			return;
 		}
 
@@ -87,7 +87,7 @@ static int radio_hci_smd_send_frame(struct sk_buff *skb)
 
 	len = smd_write(hs.fm_channel, skb->data, skb->len);
 	if (len < skb->len) {
-		PR_FM_ERR("Failed to write Data %d", len);
+		FMDERR("Failed to write Data %d", len);
 		kfree_skb(skb);
 		return -ENODEV;
 	}
@@ -104,11 +104,11 @@ static void send_disable_event(struct work_struct *worker)
 
 	skb = alloc_skb(len, GFP_ATOMIC);
 	if (!skb) {
-		PR_FM_ERR("Memory not allocated for the socket");
+		FMDERR("Memory not allocated for the socket");
 		return;
 	}
 
-	PR_FM_INFO("FM INSERT DISABLE Rx Event");
+	FMDERR("FM INSERT DISABLE Rx Event");
 
 	memcpy(skb_put(skb, len), buf, len);
 
@@ -124,7 +124,7 @@ static void radio_hci_smd_notify_cmd(void *data, unsigned int event)
 	struct radio_hci_dev *hdev = hs.hdev;
 
 	if (!hdev) {
-		PR_FM_WARNING("Frame for unknown HCI device (hdev=NULL)");
+		FMDERR("Frame for unknown HCI device (hdev=NULL)");
 		return;
 	}
 
@@ -137,7 +137,7 @@ static void radio_hci_smd_notify_cmd(void *data, unsigned int event)
 	case SMD_EVENT_CLOSE:
 		reset_worker = kzalloc(sizeof(*reset_worker), GFP_ATOMIC);
 		if (!reset_worker) {
-			PR_FM_ERR("Out of memory");
+			FMDERR("Out of memory");
 			break;
 		}
 		INIT_WORK(reset_worker, send_disable_event);
@@ -165,14 +165,14 @@ static int radio_hci_smd_register_dev(struct radio_data *hsmd)
 		&hsmd->fm_channel, hdev, radio_hci_smd_notify_cmd);
 
 	if (rc < 0) {
-		PR_FM_ERR("Cannot open the command channel");
+		FMDERR("Cannot open the command channel");
 		return -ENODEV;
 	}
 
 	smd_disable_read_intr(hsmd->fm_channel);
 
 	if (radio_hci_register_dev(hdev) < 0) {
-		PR_FM_ERR("Can't register HCI device");
+		FMDERR("Can't register HCI device");
 		return -ENODEV;
 	}
 

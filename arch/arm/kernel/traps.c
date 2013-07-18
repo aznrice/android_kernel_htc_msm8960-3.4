@@ -26,20 +26,25 @@
 #include <linux/init.h>
 #include <linux/sched.h>
 
-#include <asm/atomic.h>
+#include <linux/atomic.h>
 #include <asm/cacheflush.h>
 #include <asm/exception.h>
-#include <asm/system.h>
 #include <asm/unistd.h>
 #include <asm/traps.h>
 #include <asm/unwind.h>
 #include <asm/tls.h>
-#include <mach/restart.h>
+#include <asm/system_misc.h>
 
 #include "signal.h"
 
+#include <trace/events/exception.h>
+
 static const char *handler[]= { "prefetch abort", "data abort", "address exception", "interrupt" };
 
+#ifdef CONFIG_LGE_CRASH_HANDLER
+static int first_call_chain = 0;
+static int first_die = 1;
+#endif
 void *vectors_page;
 
 #ifdef CONFIG_DEBUG_USER
@@ -58,7 +63,14 @@ static void dump_mem(const char *, const char *, unsigned long, unsigned long);
 void dump_backtrace_entry(unsigned long where, unsigned long from, unsigned long frame)
 {
 #ifdef CONFIG_KALLSYMS
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	if (first_call_chain)
+		set_crash_store_enable();
+#endif
 	printk("[<%08lx>] (%pS) from [<%08lx>] (%pS)\n", where, (void *)where, from, (void *)from);
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	set_crash_store_disable();
+#endif
 #else
 	printk("Function entered at [<%08lx>] from [<%08lx>]\n", where, from);
 #endif
@@ -228,6 +240,11 @@ void show_stack(struct task_struct *tsk, unsigned long *sp)
 #else
 #define S_SMP ""
 #endif
+#ifdef CONFIG_THUMB2_KERNEL
+#define S_ISA " THUMB2"
+#else
+#define S_ISA " ARM"
+#endif
 
 static int __die(const char *str, int err, struct thread_info *thread, struct pt_regs *regs)
 {
@@ -235,8 +252,21 @@ static int __die(const char *str, int err, struct thread_info *thread, struct pt
 	static int die_counter;
 	int ret;
 
-	printk(KERN_EMERG "[K] Internal error: %s: %x [#%d]" S_PREEMPT S_SMP "\n",
-	       str, err, ++die_counter);
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	if (first_die) {
+		first_call_chain = 1;
+		first_die = 0;
+	}
+	set_kernel_crash_magic_number();
+	set_crash_store_enable();
+#endif
+
+	printk(KERN_EMERG "Internal error: %s: %x [#%d]" S_PREEMPT S_SMP
+	       S_ISA "\n", str, err, ++die_counter);
+
+#ifdef CONFIG_LGE_CRASH_HANDLER
+	set_crash_store_disable();
+#endif
 
 	/* trap and error numbers are mostly meaningless on ARM */
 	ret = notify_die(DIE_OOPS, str, regs, err, tsk->thread.trap_no, SIGSEGV);
@@ -253,6 +283,9 @@ static int __die(const char *str, int err, struct thread_info *thread, struct pt
 			 THREAD_SIZE + (unsigned long)task_stack_page(tsk));
 		dump_backtrace(regs, tsk);
 		dump_instr(KERN_EMERG, regs);
+#ifdef CONFIG_LGE_CRASH_HANDLER
+		first_call_chain = 0;
+#endif
 	}
 
 	return ret;
@@ -260,8 +293,6 @@ static int __die(const char *str, int err, struct thread_info *thread, struct pt
 
 static DEFINE_RAW_SPINLOCK(die_lock);
 
-extern int ramdump_source;
-char ramdump_buf[256] = "";
 /*
  * This function is protected against re-entrancy.
  */
@@ -270,7 +301,6 @@ void die(const char *str, struct pt_regs *regs, int err)
 	struct thread_info *thread = current_thread_info();
 	int ret;
 	enum bug_trap_type bug_type = BUG_TRAP_TYPE_NONE;
-	char temp_buf[KSYM_SYMBOL_LEN];
 
 	oops_enter();
 
@@ -291,25 +321,10 @@ void die(const char *str, struct pt_regs *regs, int err)
 	raw_spin_unlock_irq(&die_lock);
 	oops_exit();
 
-	if(ramdump_source != RAMDUMP_BUG)
-	{
-		if(ramdump_source != RAMDUMP_UNKNOWN_INST)
-			sprintf(ramdump_buf, "%.*s", TASK_COMM_LEN, thread->task->comm);
-		strcat(ramdump_buf, " PC:");
-		sprint_symbol(temp_buf,
-			(unsigned long)__builtin_extract_return_addr((void *)instruction_pointer(regs)) );
-		strcat(ramdump_buf, temp_buf);
-		strcat(ramdump_buf, " LR:");
-		sprint_symbol(temp_buf, (unsigned long)__builtin_extract_return_addr((void *)regs->ARM_lr) );
-		strcat(ramdump_buf, temp_buf);
-	}
-
-
 	if (in_interrupt())
-		panic(ramdump_buf);
+		panic("Fatal exception in interrupt");
 	if (panic_on_oops)
-		panic(ramdump_buf);
-	ramdump_source=0;
+		panic("Fatal exception");
 	if (ret != NOTIFY_STOP)
 		do_exit(SIGSEGV);
 }
@@ -325,7 +340,6 @@ void arm_notify_die(const char *str, struct pt_regs *regs,
 	} else {
 		die(str, regs, err);
 	}
-	ramdump_source = 0;
 }
 
 #ifdef CONFIG_GENERIC_BUG
@@ -385,24 +399,31 @@ static int call_undef_hook(struct pt_regs *regs, unsigned int instr)
 
 asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
 {
-	unsigned int correction = thumb_mode(regs) ? 2 : 4;
 	unsigned int instr;
 	siginfo_t info;
 	void __user *pc;
 
-	/*
-	 * According to the ARM ARM, PC is 2 or 4 bytes ahead,
-	 * depending whether we're in Thumb mode or not.
-	 * Correct this offset.
-	 */
-	regs->ARM_pc -= correction;
-
 	pc = (void __user *)instruction_pointer(regs);
 
 	if (processor_mode(regs) == SVC_MODE) {
-		instr = *(u32 *) pc;
+#ifdef CONFIG_THUMB2_KERNEL
+		if (thumb_mode(regs)) {
+			instr = ((u16 *)pc)[0];
+			if (is_wide_instruction(instr)) {
+				instr <<= 16;
+				instr |= ((u16 *)pc)[1];
+			}
+		} else
+#endif
+			instr = *(u32 *) pc;
 	} else if (thumb_mode(regs)) {
 		get_user(instr, (u16 __user *)pc);
+		if (is_wide_instruction(instr)) {
+			unsigned int instr2;
+			get_user(instr2, (u16 __user *)pc+1);
+			instr <<= 16;
+			instr |= instr2;
+		}
 	} else {
 		get_user(instr, (u32 __user *)pc);
 	}
@@ -410,13 +431,13 @@ asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
 	if (call_undef_hook(regs, instr) == 0)
 		return;
 
+	trace_undef_instr(regs, (void *)pc);
+
 #ifdef CONFIG_DEBUG_USER
 	if (user_debug & UDBG_UNDEFINED) {
 		printk(KERN_INFO "%s (%d): undefined instruction: pc=%p\n",
 			current->comm, task_pid_nr(current), pc);
 		dump_instr(KERN_INFO, regs);
-		sprintf(ramdump_buf, "%s (%d): undefined instruction", current->comm, task_pid_nr(current));
-		ramdump_source = RAMDUMP_UNKNOWN_INST;
 	}
 #endif
 
@@ -500,10 +521,6 @@ do_cache_op(unsigned long start, unsigned long end, int flags)
 
 		up_read(&mm->mmap_sem);
 		flush_cache_user_range(start, end);
-
-#ifdef CONFIG_ARCH_MSM7X27
-		mb();
-#endif
 		return;
 	}
 	up_read(&mm->mmap_sem);
@@ -797,17 +814,15 @@ static void __init kuser_get_tls_init(unsigned long vectors)
 		memcpy((void *)vectors + 0xfe0, (void *)vectors + 0xfe8, 4);
 }
 
-void __init early_trap_init(void)
+void __init early_trap_init(void *vectors_base)
 {
-#if defined(CONFIG_CPU_USE_DOMAINS)
-	unsigned long vectors = CONFIG_VECTORS_BASE;
-#else
-	unsigned long vectors = (unsigned long)vectors_page;
-#endif
+	unsigned long vectors = (unsigned long)vectors_base;
 	extern char __stubs_start[], __stubs_end[];
 	extern char __vectors_start[], __vectors_end[];
 	extern char __kuser_helper_start[], __kuser_helper_end[];
 	int kuser_sz = __kuser_helper_end - __kuser_helper_start;
+
+	vectors_page = vectors_base;
 
 	/*
 	 * Copy the vectors, stubs and kuser helpers (in entry-armv.S)

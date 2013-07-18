@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -591,7 +591,7 @@ int pm8xxx_batt_alarm_unregister_notifier(struct notifier_block *nb)
 }
 EXPORT_SYMBOL(pm8xxx_batt_alarm_unregister_notifier);
 
-/* for htc_gauge */
+#ifdef CONFIG_MACH_HTC
 static void (*notify_batt_lower_alarm_func_ptr)(int);
 static int pm8xxx_batt_alarm_internal_notifier_func(
 		struct notifier_block *nfb, unsigned long value, void *data)
@@ -599,7 +599,7 @@ static int pm8xxx_batt_alarm_internal_notifier_func(
 	unsigned int lower_alarm_state = !!((unsigned int)value & BIT(0));
 	pr_info("value = %lu\n", value);
 	if (notify_batt_lower_alarm_func_ptr)
-			notify_batt_lower_alarm_func_ptr(lower_alarm_state);
+		notify_batt_lower_alarm_func_ptr(lower_alarm_state);
 	return 0;
 }
 
@@ -615,7 +615,7 @@ int pm8xxx_batt_lower_alarm_register_notifier(void (*callback)(int))
 	}
 	notify_batt_lower_alarm_func_ptr = callback;
 	return pm8xxx_batt_alarm_register_notifier(
-					&htc_gauge_batt_alarm_notifier);
+			&htc_gauge_batt_alarm_notifier);
 }
 EXPORT_SYMBOL(pm8xxx_batt_lower_alarm_register_notifier);
 
@@ -636,6 +636,7 @@ int pm8xxx_batt_lower_alarm_threshold_set(int threshold_mV)
 			threshold_mV);
 }
 EXPORT_SYMBOL(pm8xxx_batt_lower_alarm_threshold_set);
+#endif
 
 static int pm8xxx_batt_alarm_reg_init(struct pm8xxx_batt_alarm_chip *chip)
 {

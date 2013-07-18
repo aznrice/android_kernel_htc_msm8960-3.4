@@ -10,6 +10,7 @@
  * GNU General Public License for more details.
  */
 
+#include <linux/module.h>
 #include <linux/delay.h>
 #include <linux/clk.h>
 #include <linux/io.h>
@@ -21,7 +22,6 @@
 
 #define V4L2_IDENT_CSID                            50002
 
-/* MIPI	CSID registers */
 #define CSID_HW_VERSION_ADDR                        0x0
 #define CSID_CORE_CTRL_ADDR                         0x4
 #define CSID_RST_CMD_ADDR                           0x8
@@ -82,6 +82,20 @@ static int msm_csid_cid_lut(
 	return rc;
 }
 
+#if DBG_CSID
+static void msm_csid_set_debug_reg(void __iomem *csidbase,
+	struct msm_camera_csid_params *csid_params)
+{
+	uint32_t val = 0;
+	val = ((1 << csid_params->lane_cnt) - 1) << 20;
+	msm_camera_io_w(0x7f010800 | val, csidbase + CSID_IRQ_MASK_ADDR);
+	msm_camera_io_w(0x7f010800 | val, csidbase + CSID_IRQ_CLEAR_CMD_ADDR);
+}
+#else
+static void msm_csid_set_debug_reg(void __iomem *csidbase,
+	struct msm_camera_csid_params *csid_params) {}
+#endif
+
 static int msm_csid_config(struct csid_cfg_params *cfg_params)
 {
 	int rc = 0;
@@ -91,6 +105,8 @@ static int msm_csid_config(struct csid_cfg_params *cfg_params)
 	void __iomem *csidbase;
 	csid_dev = v4l2_get_subdevdata(cfg_params->subdev);
 	csidbase = csid_dev->base;
+	if (csidbase == NULL)
+		return -ENOMEM;	
 	csid_params = cfg_params->parms;
 	val = csid_params->lane_cnt - 1;
 	val |= csid_params->lane_assign << 2;
@@ -105,10 +121,8 @@ static int msm_csid_config(struct csid_cfg_params *cfg_params)
 	if (rc < 0)
 		return rc;
 
-	msm_io_w(0x7fF10800, csidbase + CSID_IRQ_MASK_ADDR);
-	msm_io_w(0x7fF10800, csidbase + CSID_IRQ_CLEAR_CMD_ADDR);
+	msm_csid_set_debug_reg(csidbase, csid_params);
 
-	msleep(20);
 	return rc;
 }
 
@@ -117,7 +131,7 @@ static irqreturn_t msm_csid_irq(int irq_num, void *data)
 	uint32_t irq;
 	struct csid_device *csid_dev = data;
 	irq = msm_io_r(csid_dev->base + CSID_IRQ_STATUS_ADDR);
-	pr_info("%s CSID_IRQ_STATUS_ADDR = 0x%x\n", __func__, irq);
+	CDBG("%s CSID_IRQ_STATUS_ADDR = 0x%x\n", __func__, irq);
 	msm_io_w(irq, csid_dev->base + CSID_IRQ_CLEAR_CMD_ADDR);
 	return IRQ_HANDLED;
 }
@@ -159,6 +173,7 @@ static int msm_csid_init(struct v4l2_subdev *sd, uint32_t *csid_version)
 		csid_dev->csid_clk, ARRAY_SIZE(csid_clk_info), 1);
 	if (rc < 0) {
 		iounmap(csid_dev->base);
+		csid_dev->base = NULL;
 		return rc;
 	}
 
@@ -187,6 +202,7 @@ static int msm_csid_release(struct v4l2_subdev *sd)
 		csid_dev->csid_clk, ARRAY_SIZE(csid_clk_info), 0);
 
 	iounmap(csid_dev->base);
+	csid_dev->base = NULL;
 	return 0;
 }
 
@@ -207,6 +223,7 @@ static long msm_csid_subdev_ioctl(struct v4l2_subdev *sd,
 		return -ENOIOCTLCMD;
 	}
 }
+static const struct v4l2_subdev_internal_ops msm_csid_internal_ops;
 
 static struct v4l2_subdev_core_ops msm_csid_subdev_core_ops = {
 	.g_chip_ident = &msm_csid_subdev_g_chip_ident,
@@ -229,6 +246,11 @@ static int __devinit csid_probe(struct platform_device *pdev)
 	}
 
 	v4l2_subdev_init(&new_csid_dev->subdev, &msm_csid_subdev_ops);
+	new_csid_dev->subdev.internal_ops = &msm_csid_internal_ops;
+	new_csid_dev->subdev.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
+	snprintf(new_csid_dev->subdev.name,
+			ARRAY_SIZE(new_csid_dev->subdev.name), "msm_csid");
+
 	v4l2_set_subdevdata(&new_csid_dev->subdev, new_csid_dev);
 	platform_set_drvdata(pdev, &new_csid_dev->subdev);
 	mutex_init(&new_csid_dev->mutex);
@@ -266,7 +288,20 @@ static int __devinit csid_probe(struct platform_device *pdev)
 	}
 	disable_irq(new_csid_dev->irq->start);
 
+	new_csid_dev->base = ioremap(new_csid_dev->mem->start,
+		resource_size(new_csid_dev->mem));
+	if (!new_csid_dev->base) {
+		rc = -ENOMEM;
+		goto csid_no_resource;
+	}
+
+	new_csid_dev->hw_version =
+		msm_io_r(new_csid_dev->base + CSID_HW_VERSION_ADDR);
+	iounmap(new_csid_dev->base);
+
 	new_csid_dev->pdev = pdev;
+	
+	msm_cam_register_subdev_node(&new_csid_dev->subdev, CSID_DEV, pdev->id);
 	return 0;
 
 csid_no_resource:

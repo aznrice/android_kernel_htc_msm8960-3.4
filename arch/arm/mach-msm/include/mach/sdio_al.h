@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -14,12 +14,6 @@
 /*
  * SDIO-Abstraction-Layer API.
  */
-
-#if defined(CONFIG_ARCH_MSM7X30_LTE)
-#include <mach/7x30-lte/sdio_al.h>
-#elif defined(CONFIG_ARCH_MSM8X60_LTE)
-#include <mach/8x60-lte/sdio_al.h>
-#endif
 
 #ifndef __SDIO_AL__
 #define __SDIO_AL__

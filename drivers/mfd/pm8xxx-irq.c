@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -13,6 +13,7 @@
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
+#include <linux/export.h>
 #include <linux/err.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
@@ -45,8 +46,6 @@
 #define	PM_IRQF_MASK_ALL		(PM_IRQF_MASK_FE | \
 					PM_IRQF_MASK_RE)
 
-#define	MAX_PM_IRQ		256
-
 struct pm_irq_chip {
 	struct device		*dev;
 	spinlock_t		pm_irq_lock;
@@ -56,16 +55,8 @@ struct pm_irq_chip {
 	unsigned int		num_irqs;
 	unsigned int		num_blocks;
 	unsigned int		num_masters;
-	u8		        config[0];
+	u8			config[0];
 };
-
-struct pm_irq_wake_state
-{
-	u8	                wake_enable[MAX_PM_IRQ];
-	u16	                count_wakeable;
-};
-
-struct pm_irq_wake_state pm8xxx_wake_state;
 
 static int pm8xxx_read_root_irq(const struct pm_irq_chip *chip, u8 *rp)
 {
@@ -112,6 +103,7 @@ static int pm8xxx_read_config_irq(struct pm_irq_chip *chip, u8 bp, u8 cp, u8 *r)
 		goto bail;
 	}
 
+	cp &= ~PM_IRQF_WRITE;
 	rc = pm8xxx_writeb(chip->dev,
 			SSBI_REG_ADDR_IRQ_CONFIG(chip->base_addr), cp);
 	if (rc)
@@ -137,7 +129,10 @@ static int pm8xxx_write_config_irq(struct pm_irq_chip *chip, u8 bp, u8 cp)
 		pr_err("Failed Selecting Block %d rc=%d\n", bp, rc);
 		goto bail;
 	}
-
+	/*
+	 * Set the write bit here as this could be a unrequested irq
+	 * whose PM_IRQF_WRITE bit is not set
+	 */
 	cp |= PM_IRQF_WRITE;
 	rc = pm8xxx_writeb(chip->dev,
 			SSBI_REG_ADDR_IRQ_CONFIG(chip->base_addr), cp);
@@ -231,6 +226,11 @@ static void pm8xxx_irq_mask(struct irq_data *d)
 	master = block / 8;
 	irq_bit = pmirq % 8;
 
+	if (chip->config[pmirq] == 0) {
+		pr_warn("masking rogue irq=%d pmirq=%d\n", d->irq, pmirq);
+		chip->config[pmirq] = irq_bit << PM_IRQF_BITS_SHIFT;
+	}
+
 	config = chip->config[pmirq] | PM_IRQF_MASK_ALL;
 	pm8xxx_write_config_irq(chip, block, config);
 }
@@ -245,6 +245,11 @@ static void pm8xxx_irq_mask_ack(struct irq_data *d)
 	block = pmirq / 8;
 	master = block / 8;
 	irq_bit = pmirq % 8;
+
+	if (chip->config[pmirq] == 0) {
+		pr_warn("mask acking rogue irq=%d pmirq=%d\n", d->irq, pmirq);
+		chip->config[pmirq] = irq_bit << PM_IRQF_BITS_SHIFT;
+	}
 
 	config = chip->config[pmirq] | PM_IRQF_MASK_ALL | PM_IRQF_CLR;
 	pm8xxx_write_config_irq(chip, block, config);
@@ -295,27 +300,18 @@ static int pm8xxx_irq_set_type(struct irq_data *d, unsigned int flow_type)
 			chip->config[pmirq] &= ~PM_IRQF_MASK_FE;
 	}
 
+	/*
+	 * The PM_IRQF_WRITE flag serves as an indication that this interrupt
+	 * been requested
+	 */
+	chip->config[pmirq] |= PM_IRQF_WRITE;
+
 	config = chip->config[pmirq] | PM_IRQF_CLR;
 	return pm8xxx_write_config_irq(chip, block, config);
 }
 
 static int pm8xxx_irq_set_wake(struct irq_data *d, unsigned int on)
 {
-	struct pm_irq_chip *chip;
-	unsigned int irq;
-	chip = irq_data_get_irq_chip_data(d);
-	irq = d->irq - chip->irq_base;
-	if (on) {
-		if (!pm8xxx_wake_state.wake_enable[irq]) {
-			pm8xxx_wake_state.wake_enable[irq] = 1;
-		        pm8xxx_wake_state.count_wakeable++;
-		}
-	} else {
-		if (pm8xxx_wake_state.wake_enable[irq]) {
-			pm8xxx_wake_state.wake_enable[irq] = 0;
-			pm8xxx_wake_state.count_wakeable--;
-		}
-	}
 	return 0;
 }
 
@@ -392,65 +388,6 @@ bail_out:
 }
 EXPORT_SYMBOL_GPL(pm8xxx_get_irq_stat);
 
-int pm8xxx_get_irq_it_stat(struct pm_irq_chip *chip, int irq)
-{
-	int pmirq, rc;
-	u8  block, bits, bit;
-
-	if (chip == NULL || irq < chip->irq_base ||
-			irq >= chip->irq_base + chip->num_irqs)
-		return -EINVAL;
-
-	pmirq = irq - chip->irq_base;
-
-	block = pmirq / 8;
-	bit = pmirq % 8;
-
-	rc = pm8xxx_writeb(chip->dev,
-			SSBI_REG_ADDR_IRQ_BLK_SEL(chip->base_addr), block);
-	if (rc) {
-		pr_err("Failed Selecting block irq=%d pmirq=%d blk=%d rc=%d\n",
-			irq, pmirq, block, rc);
-		goto bail_out;
-	}
-
-	rc = pm8xxx_readb(chip->dev,
-			SSBI_REG_ADDR_IRQ_IT_STATUS(chip->base_addr), &bits);
-	if (rc) {
-		pr_err("Failed Configuring irq=%d pmirq=%d blk=%d rc=%d\n",
-			irq, pmirq, block, rc);
-		goto bail_out;
-	}
-
-	rc = (bits & (1 << bit)) ? 1 : 0;
-
-bail_out:
-
-	return rc;
-}
-EXPORT_SYMBOL_GPL(pm8xxx_get_irq_it_stat);
-
-int pm8xxx_get_irq_wake_stat(struct pm_irq_chip *chip, int irq)
-{
-
-	if (chip == NULL || irq < chip->irq_base ||
-			irq >= chip->irq_base + chip->num_irqs)
-		return -EINVAL;
-
-	return pm8xxx_wake_state.wake_enable[(irq-chip->irq_base)];
-}
-EXPORT_SYMBOL_GPL(pm8xxx_get_irq_wake_stat);
-
-int pm8xxx_get_irq_base(struct pm_irq_chip *chip)
-{
-
-	if (chip == NULL)
-		return -EINVAL;
-
-	return chip->irq_base;
-}
-EXPORT_SYMBOL_GPL(pm8xxx_get_irq_base);
-
 struct pm_irq_chip *  __devinit pm8xxx_irq_init(struct device *dev,
 				const struct pm8xxx_irq_platform_data *pdata)
 {
@@ -476,9 +413,6 @@ struct pm_irq_chip *  __devinit pm8xxx_irq_init(struct device *dev,
 		pr_err("Cannot alloc pm_irq_chip struct\n");
 		return ERR_PTR(-EINVAL);
 	}
-
-	memset((void*)&pm8xxx_wake_state.wake_enable[0],0,sizeof(u8)*MAX_PM_IRQ);
-        pm8xxx_wake_state.count_wakeable = 0;
 
 	chip->dev = dev;
 	chip->devirq = devirq;
@@ -516,7 +450,7 @@ struct pm_irq_chip *  __devinit pm8xxx_irq_init(struct device *dev,
 	return chip;
 }
 
-int __devexit pm8xxx_irq_exit(struct pm_irq_chip *chip)
+int pm8xxx_irq_exit(struct pm_irq_chip *chip)
 {
 	irq_set_chained_handler(chip->devirq, NULL);
 	kfree(chip);

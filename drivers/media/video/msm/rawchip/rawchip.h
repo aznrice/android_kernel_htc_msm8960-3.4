@@ -45,6 +45,7 @@
 #include "Yushan_API.h"
 #include "Yushan_Platform_Specific.h"
 #include "Yushan_HTC_Functions.h"
+#include "../msm.h"
 
 struct rawchip_ctrl {
 	struct msm_camera_rawchip_info *pdata;
@@ -54,6 +55,10 @@ struct rawchip_ctrl {
 	int rawchip_init;
 	atomic_t check_intr0;
 	atomic_t check_intr1;
+
+	int error_interrupt_times[TOTAL_INTERRUPT_COUNT];
+	int total_error_interrupt_times;
+
 };
 
 struct rawchip_sensor_data {
@@ -79,6 +84,7 @@ struct rawchip_sensor_data {
 	uint16_t y_even_inc;
 	uint16_t y_odd_inc;
 	uint8_t binning_rawchip;
+	uint8_t use_rawchip;
 };
 
 struct rawchip_id_info_t {

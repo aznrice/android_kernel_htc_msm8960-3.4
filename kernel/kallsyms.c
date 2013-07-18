@@ -23,7 +23,6 @@
 #include <linux/mm.h>
 #include <linux/ctype.h>
 #include <linux/slab.h>
-#include <mach/msm_iomap.h>
 
 #include <asm/sections.h>
 
@@ -344,7 +343,7 @@ int lookup_symbol_attrs(unsigned long addr, unsigned long *size,
 
 /* Look up a kernel symbol and return it in a text buffer. */
 static int __sprint_symbol(char *buffer, unsigned long address,
-			   int symbol_offset)
+			   int symbol_offset, int add_offset)
 {
 	char *modname;
 	const char *name;
@@ -359,13 +358,13 @@ static int __sprint_symbol(char *buffer, unsigned long address,
 	if (name != buffer)
 		strcpy(buffer, name);
 	len = strlen(buffer);
-	buffer += len;
 	offset -= symbol_offset;
 
+	if (add_offset)
+		len += sprintf(buffer + len, "+%#lx/%#lx", offset, size);
+
 	if (modname)
-		len += sprintf(buffer, "+%#lx/%#lx [%s]", offset, size, modname);
-	else
-		len += sprintf(buffer, "+%#lx/%#lx", offset, size);
+		len += sprintf(buffer + len, " [%s]", modname);
 
 	return len;
 }
@@ -383,10 +382,26 @@ static int __sprint_symbol(char *buffer, unsigned long address,
  */
 int sprint_symbol(char *buffer, unsigned long address)
 {
-	return __sprint_symbol(buffer, address, 0);
+	return __sprint_symbol(buffer, address, 0, 1);
 }
-
 EXPORT_SYMBOL_GPL(sprint_symbol);
+
+/**
+ * sprint_symbol_no_offset - Look up a kernel symbol and return it in a text buffer
+ * @buffer: buffer to be stored
+ * @address: address to lookup
+ *
+ * This function looks up a kernel symbol with @address and stores its name
+ * and module name to @buffer if possible. If no symbol was found, just saves
+ * its @address as is.
+ *
+ * This function returns the number of bytes stored in @buffer.
+ */
+int sprint_symbol_no_offset(char *buffer, unsigned long address)
+{
+	return __sprint_symbol(buffer, address, 0, 0);
+}
+EXPORT_SYMBOL_GPL(sprint_symbol_no_offset);
 
 /**
  * sprint_backtrace - Look up a backtrace symbol and return it in a text buffer
@@ -404,7 +419,7 @@ EXPORT_SYMBOL_GPL(sprint_symbol);
  */
 int sprint_backtrace(char *buffer, unsigned long address)
 {
-	return __sprint_symbol(buffer, address, -1);
+	return __sprint_symbol(buffer, address, -1, 1);
 }
 
 /* Look up a kernel symbol and print it to the kernel messages. */
@@ -581,38 +596,9 @@ static const struct file_operations kallsyms_operations = {
 	.release = seq_release_private,
 };
 
-#define KALLSYMS_ADDRESSES_ADDR		(MSM_KALLSYMS_SAVE_BASE + 0x0)
-#define KALLSYMS_NAMES_ADDR			(MSM_KALLSYMS_SAVE_BASE + 0x4)
-#define KALLSYMS_NUM_SYMS_ADDR		(MSM_KALLSYMS_SAVE_BASE + 0x8)
-#define KALLSYMS_TOKEN_TABLE_ADDR	(MSM_KALLSYMS_SAVE_BASE + 0xC)
-#define KALLSYMS_TOKEN_INDEX_ADDR	(MSM_KALLSYMS_SAVE_BASE + 0x10)
-#define KALLSYMS_MARKERS_ADDR			(MSM_KALLSYMS_SAVE_BASE + 0x14)
-#define _STEXT_ADDR						(MSM_KALLSYMS_SAVE_BASE + 0x18)
-#define _SINITTEXT_ADDR				(MSM_KALLSYMS_SAVE_BASE + 0x1C)
-#define _EINITTEXT_ADDR				(MSM_KALLSYMS_SAVE_BASE + 0x20)
-#define _END_ADDR						(MSM_KALLSYMS_SAVE_BASE + 0x24)
-#define KALLSYMS_MAGIC_ADDR			(MSM_KALLSYMS_SAVE_BASE + 0x28)
-#define KALLSYMS_MAGIC					0xA0B1C2D3
-
-static void save_kallsyms_addresses(void)
-{
-	*(unsigned *)KALLSYMS_ADDRESSES_ADDR = (unsigned)kallsyms_addresses;
-	*(unsigned *)KALLSYMS_NAMES_ADDR = (unsigned)kallsyms_names;
-	*(unsigned *)KALLSYMS_NUM_SYMS_ADDR = (unsigned)kallsyms_num_syms;
-	*(unsigned *)KALLSYMS_TOKEN_TABLE_ADDR = (unsigned)kallsyms_token_table;
-	*(unsigned *)KALLSYMS_TOKEN_INDEX_ADDR = (unsigned)kallsyms_token_index;
-	*(unsigned *)KALLSYMS_MARKERS_ADDR = (unsigned)kallsyms_markers;
-	*(unsigned *)_STEXT_ADDR = (unsigned)_stext;
-	*(unsigned *)_SINITTEXT_ADDR = (unsigned)_sinittext;
-	*(unsigned *)_EINITTEXT_ADDR = (unsigned)_einittext;
-	*(unsigned *)_END_ADDR = (unsigned)_end;
-	*(unsigned *)KALLSYMS_MAGIC_ADDR = (unsigned)KALLSYMS_MAGIC;
-}
-
 static int __init kallsyms_init(void)
 {
 	proc_create("kallsyms", 0444, NULL, &kallsyms_operations);
-	save_kallsyms_addresses();
 	return 0;
 }
 device_initcall(kallsyms_init);

@@ -20,7 +20,7 @@
  */
 
 #include <linux/kernel_stat.h>
-#include <linux/module.h>
+#include <linux/export.h>
 #include <linux/interrupt.h>
 #include <linux/percpu.h>
 #include <linux/init.h>
@@ -429,6 +429,12 @@ static int timer_fixup_init(void *addr, enum debug_obj_state state)
 	}
 }
 
+/* Stub timer callback for improperly used timers. */
+static void stub_timer(unsigned long data)
+{
+	WARN_ON(1);
+}
+
 /*
  * fixup_activate is called when:
  * - an active object is activated
@@ -452,7 +458,8 @@ static int timer_fixup_activate(void *addr, enum debug_obj_state state)
 			debug_object_activate(timer, &timer_debug_descr);
 			return 0;
 		} else {
-			WARN_ON_ONCE(1);
+			setup_timer(timer, stub_timer, 0);
+			return 1;
 		}
 		return 0;
 
@@ -482,12 +489,40 @@ static int timer_fixup_free(void *addr, enum debug_obj_state state)
 	}
 }
 
+/*
+ * fixup_assert_init is called when:
+ * - an untracked/uninit-ed object is found
+ */
+static int timer_fixup_assert_init(void *addr, enum debug_obj_state state)
+{
+	struct timer_list *timer = addr;
+
+	switch (state) {
+	case ODEBUG_STATE_NOTAVAILABLE:
+		if (timer->entry.prev == TIMER_ENTRY_STATIC) {
+			/*
+			 * This is not really a fixup. The timer was
+			 * statically initialized. We just make sure that it
+			 * is tracked in the object tracker.
+			 */
+			debug_object_init(timer, &timer_debug_descr);
+			return 0;
+		} else {
+			setup_timer(timer, stub_timer, 0);
+			return 1;
+		}
+	default:
+		return 0;
+	}
+}
+
 static struct debug_obj_descr timer_debug_descr = {
-	.name		= "timer_list",
-	.debug_hint	= timer_debug_hint,
-	.fixup_init	= timer_fixup_init,
-	.fixup_activate	= timer_fixup_activate,
-	.fixup_free	= timer_fixup_free,
+	.name			= "timer_list",
+	.debug_hint		= timer_debug_hint,
+	.fixup_init		= timer_fixup_init,
+	.fixup_activate		= timer_fixup_activate,
+	.fixup_free		= timer_fixup_free,
+	.fixup_assert_init	= timer_fixup_assert_init,
 };
 
 static inline void debug_timer_init(struct timer_list *timer)
@@ -508,6 +543,11 @@ static inline void debug_timer_deactivate(struct timer_list *timer)
 static inline void debug_timer_free(struct timer_list *timer)
 {
 	debug_object_free(timer, &timer_debug_descr);
+}
+
+static inline void debug_timer_assert_init(struct timer_list *timer)
+{
+	debug_object_assert_init(timer, &timer_debug_descr);
 }
 
 static void __init_timer(struct timer_list *timer,
@@ -533,6 +573,7 @@ EXPORT_SYMBOL_GPL(destroy_timer_on_stack);
 static inline void debug_timer_init(struct timer_list *timer) { }
 static inline void debug_timer_activate(struct timer_list *timer) { }
 static inline void debug_timer_deactivate(struct timer_list *timer) { }
+static inline void debug_timer_assert_init(struct timer_list *timer) { }
 #endif
 
 static inline void debug_init(struct timer_list *timer)
@@ -545,13 +586,19 @@ static inline void
 debug_activate(struct timer_list *timer, unsigned long expires)
 {
 	debug_timer_activate(timer);
-	trace_timer_start(timer, expires);
+	trace_timer_start(timer, expires,
+			 tbase_get_deferrable(timer->base) > 0 ? 'y' : 'n');
 }
 
 static inline void debug_deactivate(struct timer_list *timer)
 {
 	debug_timer_deactivate(timer);
 	trace_timer_cancel(timer);
+}
+
+static inline void debug_assert_init(struct timer_list *timer)
+{
+	debug_timer_assert_init(timer);
 }
 
 static void __init_timer(struct timer_list *timer,
@@ -904,6 +951,8 @@ int del_timer(struct timer_list *timer)
 	unsigned long flags;
 	int ret = 0;
 
+	debug_assert_init(timer);
+
 	timer_stats_timer_clear_start_info(timer);
 	if (timer_pending(timer)) {
 		base = lock_timer_base(timer, &flags);
@@ -933,6 +982,8 @@ int try_to_del_timer_sync(struct timer_list *timer)
 	struct tvec_base *base;
 	unsigned long flags;
 	int ret = -1;
+
+	debug_assert_init(timer);
 
 	base = lock_timer_base(timer, &flags);
 
@@ -1370,7 +1421,7 @@ SYSCALL_DEFINE0(getppid)
 	int pid;
 
 	rcu_read_lock();
-	pid = task_tgid_vnr(current->real_parent);
+	pid = task_tgid_vnr(rcu_dereference(current->real_parent));
 	rcu_read_unlock();
 
 	return pid;
@@ -1630,12 +1681,12 @@ static int __cpuinit init_timers_cpu(int cpu)
 			boot_done = 1;
 			base = &boot_tvec_bases;
 		}
+		spin_lock_init(&base->lock);
 		tvec_base_done[cpu] = 1;
 	} else {
 		base = per_cpu(tvec_bases, cpu);
 	}
 
-	spin_lock_init(&base->lock);
 
 	for (j = 0; j < TVN_SIZE; j++) {
 		INIT_LIST_HEAD(base->tv5.vec + j);
@@ -1770,64 +1821,6 @@ unsigned long msleep_interruptible(unsigned int msecs)
 }
 
 EXPORT_SYMBOL(msleep_interruptible);
-
-static void do_nsleep(unsigned int msecs, struct hrtimer_sleeper *sleeper,
-	int sigs)
-{
-	enum hrtimer_mode mode = HRTIMER_MODE_REL;
-	int state = sigs ? TASK_INTERRUPTIBLE : TASK_UNINTERRUPTIBLE;
-
-	/*
-	 * This is really just a reworked and simplified version
-	 * of do_nanosleep().
-	 */
-	hrtimer_init(&sleeper->timer, CLOCK_MONOTONIC, mode);
-	sleeper->timer.node.expires = ktime_set(msecs / 1000,
-					    (msecs % 1000) * NSEC_PER_MSEC);
-	hrtimer_init_sleeper(sleeper, current);
-
-	do {
-		set_current_state(state);
-		hrtimer_start(&sleeper->timer, sleeper->timer.node.expires, mode);
-		if (sleeper->task)
-			schedule();
-		hrtimer_cancel(&sleeper->timer);
-		mode = HRTIMER_MODE_ABS;
-	} while (sleeper->task && !(sigs && signal_pending(current)));
-}
-
-/**
- * msleep - sleep safely even with waitqueue interruptions
- * @msecs: Time in milliseconds to sleep for
- */
-void hr_msleep(unsigned int msecs)
-{
-	struct hrtimer_sleeper sleeper;
-
-	do_nsleep(msecs, &sleeper, 0);
-}
-
-EXPORT_SYMBOL(hr_msleep);
-
-/**
- * msleep_interruptible - sleep waiting for signals
- * @msecs: Time in milliseconds to sleep for
- */
-unsigned long hr_msleep_interruptible(unsigned int msecs)
-{
-	struct hrtimer_sleeper sleeper;
-	ktime_t left;
-
-	do_nsleep(msecs, &sleeper, 1);
-
-	if (!sleeper.task)
-		return 0;
-	left = ktime_sub(sleeper.timer.node.expires,
-			 sleeper.timer.base->get_time());
-	return max(((long) ktime_to_ns(left))/(long)NSEC_PER_MSEC, 1L);
-}
-
-EXPORT_SYMBOL(hr_msleep_interruptible);
 
 static int __sched do_usleep_range(unsigned long min, unsigned long max)
 {

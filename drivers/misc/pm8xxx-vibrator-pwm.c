@@ -41,6 +41,8 @@ struct pm8xxx_vib_pwm {
 	int state;
 	int vdd_gpio;
 	int ena_gpio;
+	int pwm_gpio;
+	int (*set_vdd_power)(int en);
 };
 static int duty_us, period_us;
 static int switch_state = 1;
@@ -55,20 +57,38 @@ static int pm8xxx_vib_set_on(struct pm8xxx_vib_pwm *vib)
 			VIB_PWM_INFO("%s vibrator is disable by switch\n",__func__);
 			return 0;
 		}
-		rc = pwm_config(vib->pwm_vib, duty_us, period_us);
+		if (vib->vdd_gpio)
+			rc = gpio_direction_output(vib->vdd_gpio, ENABLE_AMP);
+		else if (vib->set_vdd_power != NULL)
+			rc= vib->set_vdd_power(ENABLE_AMP);
 		if (rc < 0) {
-			VIB_PWM_ERR("%s pwm config fail",__func__);
-			return -EINVAL;
-		}
-		rc = pwm_enable(vib->pwm_vib);
-		if (rc < 0) {
-			VIB_PWM_ERR("%s pwm enable fail",__func__);
+			VIB_PWM_ERR("%s enable amp fail",__func__);
 			return -EINVAL;
 		}
 		rc = gpio_direction_output(vib->ena_gpio, ENABLE_AMP);
 		if (rc < 0) {
 			VIB_PWM_ERR("%s enable amp fail",__func__);
 			return -EINVAL;
+		}
+		if (vib->pwm_gpio) {
+
+			rc = gpio_direction_output(vib->pwm_gpio, 1);
+			if (rc < 0) {
+				VIB_PWM_ERR("%s enable pwm fail",__func__);
+				return -EINVAL;
+			}
+		} else {
+
+			rc = pwm_config(vib->pwm_vib, duty_us, period_us);
+			if (rc < 0) {
+				VIB_PWM_ERR("%s pwm config fail",__func__);
+				return -EINVAL;
+			}
+			rc = pwm_enable(vib->pwm_vib);
+			if (rc < 0) {
+				VIB_PWM_ERR("%s pwm enable fail",__func__);
+				return -EINVAL;
+			}
 		}
 	return rc;
 }
@@ -78,22 +98,41 @@ static int pm8xxx_vib_set_off(struct pm8xxx_vib_pwm *vib)
 	int rc = 0;
 	VIB_PWM_INFO("%s \n",__func__);
 
-		rc = pwm_config(vib->pwm_vib, period_us/2, period_us);
-		if (rc < 0) {
-			VIB_PWM_ERR("%s pwm config fail",__func__);
-			return -EINVAL;
-		}
-		rc = pwm_enable(vib->pwm_vib);
-		if (rc < 0) {
-			VIB_PWM_ERR("%s pwm enable fail",__func__);
-			return -EINVAL;
+		if (vib->pwm_gpio) {
+
+			rc = gpio_direction_output(vib->pwm_gpio, 0);
+			if (rc < 0) {
+				VIB_PWM_ERR("%s enable pwm fail",__func__);
+				return -EINVAL;
+			}
+		} else {
+
+			rc = pwm_config(vib->pwm_vib, period_us/2, period_us);
+			if (rc < 0) {
+				VIB_PWM_ERR("%s pwm config fail",__func__);
+				return -EINVAL;
+			}
+			rc = pwm_enable(vib->pwm_vib);
+			if (rc < 0) {
+				VIB_PWM_ERR("%s pwm enable fail",__func__);
+				return -EINVAL;
+			}
 		}
 		rc = gpio_direction_output(vib->ena_gpio, DISABLE_AMP);
 		if (rc < 0) {
 			VIB_PWM_ERR("%s disable amp fail",__func__);
 			return -EINVAL;
 		}
-		pwm_disable(vib->pwm_vib);
+		if (vib->vdd_gpio)
+			rc = gpio_direction_output(vib->vdd_gpio, DISABLE_AMP);
+		else if (vib->set_vdd_power!= NULL)
+			rc = vib->set_vdd_power(DISABLE_AMP);
+		if (rc < 0) {
+			VIB_PWM_ERR("%s disable amp fail",__func__);
+			return -EINVAL;
+		}
+		if (!vib->pwm_gpio)
+			pwm_disable(vib->pwm_vib);
 	return rc;
 }
 
@@ -104,6 +143,7 @@ static void pm8xxx_vib_enable(struct timed_output_dev *dev, int value)
 	VIB_PWM_INFO("%s vibrate period: %d msec\n",__func__,value);
 
 retry:
+
 	if (hrtimer_try_to_cancel(&vib->vib_timer) < 0) {
 		cpu_relax();
 		goto retry;
@@ -114,10 +154,10 @@ retry:
 	else {
 		value = (value > vib->pdata->max_timeout_ms ?
 				 vib->pdata->max_timeout_ms : value);
+                pm8xxx_vib_set_on(vib);
 		hrtimer_start(&vib->vib_timer,
 			      ktime_set(value / 1000, (value % 1000) * 1000000),
 			      HRTIMER_MODE_REL);
-		pm8xxx_vib_set_on(vib);
 	}
 }
 
@@ -145,11 +185,13 @@ static enum hrtimer_restart pm8xxx_vib_timer_func(struct hrtimer *timer)
 	struct pm8xxx_vib_pwm *vib = container_of(timer, struct pm8xxx_vib_pwm,
 							 vib_timer);
 	VIB_PWM_INFO("%s \n",__func__);
+
 	rc = gpio_direction_output(vib->ena_gpio, DISABLE_AMP);
-			if (rc < 0) {
-				VIB_PWM_ERR("%s disable amp fail",__func__);
-			}
+	if (rc < 0) {
+		VIB_PWM_ERR("%s disable amp fail",__func__);
+	}
 	schedule_work(&vib->work);
+
 	return HRTIMER_NORESTART;
 }
 
@@ -214,16 +256,22 @@ static int pm8xxx_vib_suspend(struct device *dev)
 	VIB_PWM_INFO("%s \n",__func__);
 	hrtimer_cancel(&vib->vib_timer);
 	cancel_work_sync(&vib->work);
-	/* turn-off vibrator */
+	
 	pm8xxx_vib_set_off(vib);
-	gpio_direction_output(vib->vdd_gpio, DISABLE_VDD);
+	if (vib->vdd_gpio)
+		gpio_direction_output(vib->vdd_gpio, DISABLE_VDD);
+	else if (vib->set_vdd_power != NULL)
+		vib->set_vdd_power(DISABLE_VDD);
 	return 0;
 }
 static int pm8xxx_vib_resume(struct device *dev)
 {
 	struct pm8xxx_vib_pwm *vib = dev_get_drvdata(dev);
 	VIB_PWM_INFO("%s \n",__func__);
-	gpio_direction_output(vib->vdd_gpio, ENABLE_VDD);
+	if (vib->vdd_gpio)
+		gpio_direction_output(vib->vdd_gpio, ENABLE_VDD);
+	else if (vib->set_vdd_power != NULL)
+		vib->set_vdd_power(ENABLE_VDD);
 	return 0;
 }
 static const struct dev_pm_ops pm8xxx_vib_pm_ops = {
@@ -252,6 +300,8 @@ static int __devinit pm8xxx_vib_probe(struct platform_device *pdev)
 	vib->pdata	= pdata;
 	vib->vdd_gpio	= pdata->vdd_gpio;
 	vib->ena_gpio	= pdata->ena_gpio;
+	vib->pwm_gpio	= pdata->pwm_gpio;
+	vib->set_vdd_power = pdata->set_vdd_power;
 	vib->dev	= &pdev->dev;
 	spin_lock_init(&vib->lock);
 	INIT_WORK(&vib->work, pm8xxx_vib_update);
@@ -260,24 +310,35 @@ static int __devinit pm8xxx_vib_probe(struct platform_device *pdev)
 	vib->timed_dev.name = "vibrator";
 	vib->timed_dev.get_time = pm8xxx_vib_get_time;
 	vib->timed_dev.enable = pm8xxx_vib_enable;
-	vib->pwm_vib = pwm_request(vib->pdata->bank, vib->timed_dev.name);
-	if (vib->pwm_vib < 0){
-		rc = -ENOMEM;
-		VIB_PWM_ERR("%s, pwm_request fail\n", __func__);
-		goto err_pwm_request;
+	if (vib->pdata->bank) {
+		vib->pwm_vib = pwm_request(vib->pdata->bank, vib->timed_dev.name);
+		if (vib->pwm_vib < 0){
+			rc = -ENOMEM;
+			VIB_PWM_ERR("%s, pwm_request fail\n", __func__);
+			goto err_pwm_request;
+		}
 	}
-
 	rc = gpio_request(vib->ena_gpio, "TI_AMP_ena");
 	if (rc) {
 		rc = -ENOMEM;
 		VIB_PWM_ERR("%s, gpio_request ena fail\n", __func__);
 		goto err_ena_gpio_request;
 	}
-	rc= gpio_request(vib->vdd_gpio, "TI_AMP_vdd");
-	if(rc) {
-		rc = -ENOMEM;
-		VIB_PWM_ERR("%s, gpio_request vdd fail\n", __func__);
-		goto err_vdd_gpio_request;
+	if (vib->vdd_gpio) {
+		rc= gpio_request(vib->vdd_gpio, "TI_AMP_vdd");
+		if(rc) {
+			rc = -ENOMEM;
+			VIB_PWM_ERR("%s, gpio_request vdd fail\n", __func__);
+			goto err_vdd_gpio_request;
+		}
+	}
+	if (vib->pwm_gpio) {
+		rc= gpio_request(vib->pwm_gpio, "VIB_PWM");
+		if(rc) {
+			rc = -ENOMEM;
+			VIB_PWM_ERR("%s, gpio_request pwm fail\n", __func__);
+			goto err_pwm_gpio_request;
+		}
 	}
 	rc = timed_output_dev_register(&vib->timed_dev);
 	if (rc < 0)
@@ -296,8 +357,12 @@ static int __devinit pm8xxx_vib_probe(struct platform_device *pdev)
 	period_us=vib->pdata->PERIOD_US;
 	VIB_PWM_INFO("%s-\n", __func__);
 	return 0;
+err_pwm_gpio_request:
+	if (vib->pwm_gpio)
+		gpio_free(vib->pwm_gpio);
 err_vdd_gpio_request:
-	gpio_free(vib->vdd_gpio);
+	if (vib->vdd_gpio)
+		gpio_free(vib->vdd_gpio);
 err_ena_gpio_request:
 	gpio_free(vib->ena_gpio);
 err_pwm_request:
@@ -346,4 +411,3 @@ module_exit(pm8xxx_vib_exit);
 MODULE_ALIAS("platform:" PM8XXX_VIBRATOR_PWM_DEV_NAME);
 MODULE_DESCRIPTION("pm8xxx vibrator pwm driver");
 MODULE_LICENSE("GPL v2");
-

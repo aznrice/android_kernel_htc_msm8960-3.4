@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -117,7 +117,7 @@ struct pm8xxx_mpp_config_data {
  * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
  */
 int pm8xxx_mpp_config(unsigned mpp, struct pm8xxx_mpp_config_data *config);
-int pm8xxx_dump_mpp(struct seq_file *m, int curr_len, char *gpio_buffer);
+
 #else
 
 static inline int pm8xxx_mpp_config(unsigned mpp,
@@ -126,11 +126,6 @@ static inline int pm8xxx_mpp_config(unsigned mpp,
 	return -ENXIO;
 }
 
-static inline int pm8xxx_dump_mpp(struct seq_file *m,
-					int curr_len, char *gpio_buffer)
-{
-	return curr_len;
-}
 #endif
 
 /* MPP Type: type */
@@ -173,7 +168,7 @@ static inline int pm8xxx_dump_mpp(struct seq_file *m,
 #define	PM8921_MPP_DIG_LEVEL_VPH	7
 
 /* Digital Input/Output: level [PM8821] */
-#define	PM8821_MPP_DIG_LEVEL_1P8	1
+#define	PM8821_MPP_DIG_LEVEL_1P8	0
 #define	PM8821_MPP_DIG_LEVEL_VPH	7
 
 /* Digital Input/Output: level [PM8018] */

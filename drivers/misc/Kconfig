@@ -2,23 +2,13 @@
 # Misc strange devices
 #
 
-# This one has to live outside of the MISC_DEVICES conditional,
-# because it may be selected by drivers/platform/x86/hp_accel.
+menu "Misc devices"
+
 config SENSORS_LIS3LV02D
 	tristate
 	depends on INPUT
 	select INPUT_POLLDEV
 	default n
-
-menuconfig MISC_DEVICES
-	bool "Misc devices"
-	---help---
-	  Say Y here to get to see options for device drivers from various
-	  different categories. This option alone does not add any kernel code.
-
-	  If you say N, all options in this submenu will be skipped and disabled.
-
-if MISC_DEVICES
 
 config AD525X_DPOT
 	tristate "Analog Devices Digital Potentiometers"
@@ -67,7 +57,7 @@ config ANDROID_PMEM
 
 config ATMEL_PWM
 	tristate "Atmel AT32/AT91 PWM support"
-	depends on AVR32 || ARCH_AT91SAM9263 || ARCH_AT91SAM9RL || ARCH_AT91CAP9
+	depends on HAVE_CLK
 	help
 	  This option enables device driver support for the PWM channels
 	  on certain Atmel processors.  Pulse Width Modulation is used for
@@ -150,6 +140,7 @@ config PHANTOM
 
 config INTEL_MID_PTI
 	tristate "Parallel Trace Interface for MIPI P1149.7 cJTAG standard"
+	depends on PCI
 	default n
 	help
 	  The PTI (Parallel Trace Interface) driver directs
@@ -506,6 +497,23 @@ config PCH_PHUB
 	  To compile this driver as a module, choose M here: the module will
 	  be called pch_phub.
 
+config USB_SWITCH_FSA9480
+	tristate "FSA9480 USB Switch"
+	depends on I2C
+	help
+	  The FSA9480 is a USB port accessory detector and switch.
+	  The FSA9480 is fully controlled using I2C and enables USB data,
+	  stereo and mono audio, video, microphone and UART data to use
+	  a common connector port.
+
+config MAX8997_MUIC
+	tristate "MAX8997 MUIC Support"
+	depends on MFD_MAX8997
+	help
+	  If you say yes here you get support for the MUIC device of
+	  Maxim MAX8997 PMIC.
+	  The MAX8997 MUIC is a USB port accessory detector and switch.
+
 config WL127X_RFKILL
 	tristate "Bluetooth power control driver for TI wl127x"
 	depends on RFKILL
@@ -555,24 +563,20 @@ config TSIF_CHRDEV
 	  To compile this driver as module, choose M here: the
 	  module will be called tsif_chrdev.
 
-config TSIF_NM32X_62X_DEV
-	tristate "NM32x/62x TSIF device"
-	depends on TSIF
-	default n
-	---help---
-	  This driver uses low level TSIF interface. It provides Newport 
-	  Media NM32x/62x device useable from user space programs: one 
-	  can read TSIF stream from this device.
-
-	  To compile this driver as module, choose M here: the
-	  module will be called nm32x_62x-tsi.
-
 config TSIF_DEBUG
 	bool "Turn on debugging information for tsif driver"
 	depends on TSIF
 	default n
 	---help---
 	  This turns on debugging information for the tsif driver
+
+config TSPP
+	depends on ARCH_MSM
+	tristate "TSPP (Transport Stream Packet Processor) Support"
+	---help---
+	Transport Stream Packet Processor is used to offload the
+	processing of MPEG transport streams from the main processor.
+	This can also be compiled as a loadable module.
 
 config HAPTIC_ISA1200
 	tristate "ISA1200 haptic support"
@@ -600,27 +604,40 @@ config PMIC8XXX_VIBRATOR
 	  timed output class.
 
 config PMIC8XXX_VIBRATOR_PWM
-        tristate "Qualcomm Vibrator support for PMIC8XXX with pwm function"
-        help
-          This option enables device driver support for the vibrator
-          on the PM8XXX chips. The vibrator is controlled using the
-          timed output class.
-
-config PMIC8058_NFC
-	tristate "Qualcomm PM8058 support for Near Field Communication"
-	depends on PMIC8058
-	default y
+	tristate "Qualcomm Vibrator support for PMIC8XXX with PWM function"
+	depends on MFD_PM8XXX && ANDROID_TIMED_OUTPUT
 	help
-	  Qualcomm PM8058 chip has a module to support NFC (Near Field
-	  Communication). This option enables the driver to support it.
+	  This option enables device driver support for the vibrator
+	  on the PM8XXX chips. The vibrator is controlled using the
+	  timed output class.
 
-config PMIC8058_UPL
-	tristate "Qualcomm PM8058 support for User Programmable Logic"
-	depends on PMIC8058
+config ANDROID_VIBRATOR
+	bool "Android vibrator support"
+	depends on ANDROID_TIMED_OUTPUT
 	default n
 	help
+	  This option enalbes device driver support for Android Vibrator driver.
+	  Some functions should be given by platform data for enable PWM, Motor IC, etc.
+
+config TOUCHSENSE_VIBRATOR
+	bool "Immersion Touchsense vibrator support"
+	help
+	  This option enables device driver support for Immersion Touchsense
+	  vibrator.
+
+config PMIC8XXX_NFC
+	tristate "Qualcomm PM8XXX support for Near Field Communication"
+	depends on MFD_PM8XXX
+	help
+	  Qualcomm PM8XXX chips have a module to support NFC (Near Field
+	  Communication). This option enables the driver to support it.
+
+config PMIC8XXX_UPL
+	tristate "Qualcomm PM8XXX support for User Programmable Logic"
+	depends on MFD_PM8XXX
+	help
 	  This option enables device driver support for User Programmable Logic
-	  on Qualcomm PM8058 chip.  The UPL module provides a means to implement
+	  on Qualcomm PM8XXX chips. The UPL module provides a means to implement
 	  simple truth table based logic via a set of control registers. I/O may
 	  be routed in and out of the UPL module via GPIO or DTEST pins.
 
@@ -632,14 +649,6 @@ config PMIC8058_XOADC
 	  Enables User processor ADC reads over the XOADC module of Qualcomm's
 	  PMIC8058. Driver interface to program registers of the ADC over
 	  AMUX channels, devices on programmable MPP's and xotherm.
-
-config TZCOM
-	tristate "Trustzone Communicator driver"
-	default n
-	help
-	  Provides a communication interface between userspace and
-	  TrustZone Operating Environment (TZBSP) using Secure Channel
-	  Manager (SCM) interface.
 
 config QSEECOM
 	tristate "Qualcomm Secure Execution Communicator driver"
@@ -656,38 +665,55 @@ config QFP_FUSE
 	  to the fuse block. Currently this is supported only
 	  on FSM targets.
 
-config CABLE_DETECT_8X60
-        boolean "Cable detect driver"
-        depends on ARCH_MSM8X60
-        default n
-        help
-          Detect usb, ac and other accessories.
+config USB_HSIC_SMSC_HUB
+	tristate "Support for HSIC based MSM on-chip SMSC3503 HUB"
+	depends on USB_EHCI_MSM_HSIC
+	help
+	  Enables support for the HSIC (High Speed Inter-Chip) based
+	  SMSC3503 hub controller present on the Qualcomm chipsets.
 
-config CABLE_DETECT_8960
-        boolean "Cable detect driver"
-        depends on ARCH_MSM8960
-        default n
-        help
-          Detect usb, ac and other accessories.
+	  This adds support for connecting devices like mouse in HSIC
+	  Host mode.
+
+config BU52031NVX
+	tristate "Cradle BU52031NVX support"
+	depends on MFD_PM8XXX
+	help
+	  This option enables device driver support for the cradle
+	  on the PM8XXX chips. The cradle is controlled using the
+	  PM8XXX gpio.
+
+config BU52031NVX_POUCHDETECT
+	tristate "Cradle BU52031NVX_POUCHDETECT support"
+	depends on BU52031NVX
+	help
+	  depends on BU52031NVX
+
+config CABLE_DETECT_8XXX
+	boolean "Cable detect driver"
+	default n
+	help
+	  Detect USB, AC, and other accessories.
 
 config CABLE_DETECT_ACCESSORY
-        boolean "CABLE ACCESSORY DETECT"
-        default n
+	boolean "Cable accessory detect"
+	default n
 
 config CABLE_DETECT_ACCESSORY_BY_ADC
-        boolean "DETECT ACCESSORY BY PMIC ADC"
-        default n
+	boolean "Cable detect accessory by PMIC ADC"
+	default n
 
-config CABLE_DETECT_GPIO_DOCK
-        boolean "CABLE_DETECT_GPIO_DOCK"
-        depends on CABLE_DETECT_8960
-        default n
+config VP_A1028
+	tristate "A1028 Voice Processor driver"
+	depends on I2C
+	help
+	  A1028 Voice Processor driver implemented by HTC.
 
-config CABLE_DETECT_FIVE_POGOPIN_AUDIO_DOCK
-        boolean "CABLE_DETECT_FIVE_POGOPIN_AUDIO_DOCK"
-        depends on CABLE_DETECT_8960
-        default n
-
+config SENSORS_NFC_PN544
+	tristate "PN544 NFC Sensor driver"
+	depends on I2C
+	help
+	  PN544 NFC driver.
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
@@ -696,6 +722,7 @@ source "drivers/misc/iwmc3200top/Kconfig"
 source "drivers/misc/ti-st/Kconfig"
 source "drivers/misc/lis3lv02d/Kconfig"
 source "drivers/misc/carma/Kconfig"
-source "drivers/misc/mpu3050/Kconfig"
+source "drivers/misc/altera-stapl/Kconfig"
+source "drivers/misc/slimport_anx7808/Kconfig"
 
-endif # MISC_DEVICES
+endmenu

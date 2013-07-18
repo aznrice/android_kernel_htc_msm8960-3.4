@@ -42,7 +42,6 @@
 #include <linux/kernel.h>
 #include <linux/bug.h>
 #include <linux/sched.h>
-#include <mach/restart.h>
 
 extern const struct bug_entry __start___bug_table[], __stop___bug_table[];
 
@@ -124,8 +123,6 @@ const struct bug_entry *find_bug(unsigned long bugaddr)
 	return module_find_bug(bugaddr);
 }
 
-extern char ramdump_buf[256];
-extern int ramdump_source;
 enum bug_trap_type report_bug(unsigned long bugaddr, struct pt_regs *regs)
 {
 	const struct bug_entry *bug;
@@ -172,22 +169,15 @@ enum bug_trap_type report_bug(unsigned long bugaddr, struct pt_regs *regs)
 		return BUG_TRAP_TYPE_WARN;
 	}
 
-	printk(KERN_EMERG "------------[ cut here ]------------\n");
-	ramdump_source = RAMDUMP_BUG;
+	printk(KERN_DEFAULT "------------[ cut here ]------------\n");
 
 	if (file)
-	{
 		printk(KERN_CRIT "kernel BUG at %s:%u!\n",
 		       file, line);
-		sprintf(ramdump_buf, "kernel BUG at %s:%u!", file, line);
-	}
 	else
-	{
 		printk(KERN_CRIT "Kernel BUG at %p "
 		       "[verbose debug info unavailable]\n",
 		       (void *)bugaddr);
-		sprintf(ramdump_buf, "Kernel BUG at %p [verbose debug info unavailable]", (void *)bugaddr);
-	}
 
 	return BUG_TRAP_TYPE_BUG;
 }

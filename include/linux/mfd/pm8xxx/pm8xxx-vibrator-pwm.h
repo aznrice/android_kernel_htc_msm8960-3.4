@@ -23,6 +23,8 @@ struct pm8xxx_vibrator_pwm_platform_data {
 	int bank;
 	int ena_gpio;
 	int vdd_gpio;
+	int pwm_gpio;
+	int (*set_vdd_power)(int en);
 };
 enum amp_state {
 	DISABLE_AMP,
@@ -32,5 +34,5 @@ enum vdd_state {
 	DISABLE_VDD,
 	ENABLE_VDD,
 };
-#endif /* __PMIC8XXX_VIBRATOR_PWM_H__ */
+#endif 
 

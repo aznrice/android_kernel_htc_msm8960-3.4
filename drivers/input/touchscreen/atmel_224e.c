@@ -63,6 +63,7 @@ static DEFINE_MUTEX(reload_lock);
 struct atmel_ts_data {
 	struct i2c_client *client;
 	struct input_dev *input_dev;
+	struct input_dev *sr_input_dev;
 	struct workqueue_struct *atmel_wq;
 	struct workqueue_struct *atmel_delayed_wq;
 	struct workqueue_struct *atmel_cable_vbus_wq;
@@ -251,6 +252,77 @@ static uint8_t get_rid(struct atmel_ts_data *ts, uint8_t object_type)
 }
 
 #ifdef ATMEL_EN_SYSFS
+
+enum SR_REG_STATE{
+	ALLOCATE_DEV_FAIL = -2,
+	REGISTER_DEV_FAIL,
+	SUCCESS,
+};
+
+static int register_sr_touch_device(void)
+{
+	struct atmel_ts_data *ts = private_ts;
+
+	ts->sr_input_dev = input_allocate_device();
+
+	if (ts->sr_input_dev == NULL) {
+		printk(KERN_ERR "[TP][TOUCH_ERR]%s: Failed to allocate SR input device\n", __func__);
+		return ALLOCATE_DEV_FAIL;
+	}
+	ts->sr_input_dev->name = "sr_touchscreen";
+	set_bit(EV_SYN, ts->sr_input_dev->evbit);
+	set_bit(EV_ABS, ts->sr_input_dev->evbit);
+	set_bit(EV_KEY, ts->sr_input_dev->evbit);
+
+	set_bit(KEY_BACK, ts->sr_input_dev->keybit);
+	set_bit(KEY_HOME, ts->sr_input_dev->keybit);
+	set_bit(KEY_MENU, ts->sr_input_dev->keybit);
+	set_bit(KEY_SEARCH, ts->sr_input_dev->keybit);
+	set_bit(BTN_TOUCH, ts->sr_input_dev->keybit);
+	set_bit(KEY_APP_SWITCH, ts->sr_input_dev->keybit);
+	set_bit(INPUT_PROP_DIRECT, ts->sr_input_dev->propbit);
+	ts->sr_input_dev->mtsize = ts->finger_support;
+	input_set_abs_params(ts->sr_input_dev, ABS_MT_TRACKING_ID,
+		0, ts->finger_support - 1, 0, 0);
+	printk(KERN_INFO "[TP][SR]input_set_abs_params: mix_x %d, max_x %d,"
+		" min_y %d, max_y %d\n", ts->abs_x_min, ts->abs_x_max,
+		ts->abs_y_min, ts->abs_y_max);
+
+	input_set_abs_params(ts->sr_input_dev, ABS_MT_POSITION_X,
+				ts->abs_x_min, ts->abs_x_max, 0, 0);
+	input_set_abs_params(ts->sr_input_dev, ABS_MT_POSITION_Y,
+				ts->abs_y_min, ts->abs_y_max, 0, 0);
+	input_set_abs_params(ts->sr_input_dev, ABS_MT_TOUCH_MAJOR,
+				0, 255, 0, 0);
+	input_set_abs_params(ts->sr_input_dev, ABS_MT_WIDTH_MAJOR,
+				0, 30, 0, 0);
+	input_set_abs_params(ts->sr_input_dev, ABS_MT_PRESSURE,
+				0, 30, 0, 0);
+
+	if (input_register_device(ts->sr_input_dev)) {
+                input_free_device(ts->sr_input_dev);
+		printk(KERN_ERR "[TP][SR][TOUCH_ERR]%s: Unable to register %s input device\n",
+			__func__, ts->sr_input_dev->name);
+		return REGISTER_DEV_FAIL;
+	}
+	return SUCCESS;
+}
+
+static ssize_t set_en_sr(struct device *dev, struct device_attribute *attr,
+						const char *buf, size_t count)
+{
+	struct atmel_ts_data *ts = private_ts;
+	if (buf[0]) {
+		if (ts->sr_input_dev)
+			printk(KERN_INFO "[TP]%s: SR device already exist!\n", __func__);
+		else
+			printk(KERN_INFO "[TP]%s: SR touch device enable result:%X\n", __func__, register_sr_touch_device());
+	}
+	return count;
+}
+
+static DEVICE_ATTR(sr_en, S_IWUSR, 0, set_en_sr);
+
 static ssize_t atmel_reset(struct device *dev, struct device_attribute *attr,
 			     const char *buf, size_t count)
 {
@@ -750,6 +822,11 @@ static int atmel_touch_sysfs_init(void)
 		printk(KERN_ERR "[TP]TOUCH_ERR: create_file info failed\n");
 		return ret;
 	}
+	ret = sysfs_create_file(android_touch_kobj, &dev_attr_sr_en.attr);
+	if (ret) {
+		printk(KERN_ERR "[TP]TOUCH_ERR: create_file SR_EN failed\n");
+		return ret;
+	}
 
 	return 0;
 }
@@ -768,6 +845,7 @@ static void atmel_touch_sysfs_deinit(void)
 	sysfs_remove_file(android_touch_kobj, &dev_attr_htc_event.attr);
 	sysfs_remove_file(android_touch_kobj, &dev_attr_disable_touch.attr);
 	sysfs_remove_file(android_touch_kobj, &dev_attr_reset.attr);
+	sysfs_remove_file(android_touch_kobj, &dev_attr_sr_en.attr);
 	kobject_del(android_touch_kobj);
 }
 
@@ -800,7 +878,7 @@ static int check_delta_full(struct atmel_ts_data *ts,
 				get_object_address(ts, DIAGNOSTIC_T37), data, 2);
 		}
 		if (loop_j == 10)
-			printk(KERN_ERR "[TP]TOUCH_ERR:%s: Diag data not ready\n", __func__);
+			printk(KERN_WARNING "[TP]%s: Diag data not ready\n", __func__);
 
 		i2c_atmel_read(ts->client,
 			get_object_address(ts, DIAGNOSTIC_T37),
@@ -2313,6 +2391,8 @@ static int atmel_224e_ts_remove(struct i2c_client *client)
 
 	destroy_workqueue(ts->atmel_delayed_wq);
 	destroy_workqueue(ts->atmel_wq);
+	if (ts->sr_input_dev != NULL)
+		input_unregister_device(ts->sr_input_dev);
 	input_unregister_device(ts->input_dev);
 	kfree(ts);
 

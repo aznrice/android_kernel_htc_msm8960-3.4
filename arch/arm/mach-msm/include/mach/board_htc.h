@@ -53,7 +53,7 @@ enum {
 	KERNEL_FLAG_RESERVED_5 = BIT(5),
 	KERNEL_FLAG_MDM_CHARM_DEBUG = BIT(6),
 	KERNEL_FLAG_MSM_SMD_DEBUG = BIT(7),
-#ifdef CONFIG_ARCH_MSM8960
+#if defined(CONFIG_ARCH_APQ8064) || defined(CONFIG_ARCH_MSM8960)
 	KERNEL_FLAG_PVS_SLOW_CPU = BIT(8),
 	KERNEL_FLAG_PVS_NOM_CPU = BIT(9),
 	KERNEL_FLAG_PVS_FAST_CPU = BIT(10),
@@ -85,7 +85,60 @@ enum {
 	KERNEL_FLAG_GPIO_DUMP = BIT(31),
 };
 
-/* common init routines for use by arch/arm/mach-msm/board-*.c */
+enum {
+	RADIO_FLAG_RESERVE_0 = BIT(0),
+	RADIO_FLAG_RESERVE_1 = BIT(1),
+	RADIO_FLAG_RESERVE_2 = BIT(2),
+	RADIO_FLAG_USB_UPLOAD = BIT(3),
+	RADIO_FLAG_OWN_SERIAL = BIT(8),
+	RADIO_FLAG_OWN_USB = BIT(9),
+	RADIO_FLAG_OWN_SD = BIT(10),
+	RADIO_FLAG_RESTART_EN = BIT(11),
+	RADIO_FLAG_ENABLE_CHARGE_SW_PROTECT = BIT(12),
+	RADIO_FLAG_HTC_SET_MIN_CLKRGM_PERF_LEVEL_2 = (1 << 13),
+	RADIO_FLAG_HTC_SET_MIN_CLKRGM_PERF_LEVEL_3 = (2 << 13),
+	RADIO_FLAG_HTC_SET_MIN_CLKRGM_PERF_LEVEL_4 = (3 << 13),
+	RADIO_FLAG_HTC_SET_MAX_CLKRGM_PERF_LEVEL_0 = (4 << 13),
+	RADIO_FLAG_HTC_SET_MAX_CLKRGM_PERF_LEVEL_1 = (5 << 13),
+	RADIO_FLAG_HTC_SET_MAX_CLKRGM_PERF_LEVEL_2 = (6 << 13),
+	RADIO_FLAG_HTC_SET_MAX_CLKRGM_PERF_LEVEL_3 = (7 << 13),
+	RADIO_FLAG_HTC_SET_MAX_CLKRGM_PERF_LEVEL_4 = (8 << 13),
+	RADIO_FLAG_HTC_SET_FIX_CLKRGM_PERF_LEVEL_0 = (9 << 13),
+	RADIO_FLAG_HTC_SET_FIX_CLKRGM_PERF_LEVEL_1 = (10 << 13),
+	RADIO_FLAG_HTC_SET_FIX_CLKRGM_PERF_LEVEL_2 = (11 << 13),
+	RADIO_FLAG_HTC_SET_FIX_CLKRGM_PERF_LEVEL_3 = (12 << 13),
+	RADIO_FLAG_HTC_SET_FIX_CLKRGM_PERF_LEVEL_4 = (13 << 13),
+	RADIO_FLAG_HTC_SET_FIX_CLKRGM_PERF_LEVEL_5 = (14 << 13),
+	RADIO_FLAG_RESERVE_16 = BIT(16),
+	RADIO_FLAG_RESERVE_17 = BIT(17),
+	RADIO_FLAG_RESERVE_18 = BIT(18),
+	RADIO_FLAG_RESTART_DEBUG_EN = BIT(19),
+	RADIO_FLAG_USB_IF_FLAG = BIT(20),
+	RADIO_FLAG_RESERVE_21 = BIT(21),
+	RADIO_FLAG_RESERVE_22 = BIT(22),
+	RADIO_FLAG_RESERVE_23 = BIT(23),
+	RADIO_FLAG_RESERVE_24 = BIT(24),
+	RADIO_FLAG_FATAL_POPUP_DIALOG = BIT(25),
+	RADIO_FLAG_FATAL_RESET_WHEN_FATAL = BIT(26),
+	RADIO_FLAG_RESERVE_27 = BIT(27),
+	RADIO_FLAG_DOG_2061_LOG_ENABLE = BIT(28),
+	RADIO_FLAG_SLEEP_LOG_ENABLE = BIT(29),
+	RADIO_FLAG_AUTO_DLMODE_WHEN_FATAL = BIT(30),
+	RADIO_FLAG_USE_EFS_NV = BIT(31),
+};
+
+enum {
+	MFG_MODE_NORMAL,
+	MFG_MODE_FACTORY2,
+	MFG_MODE_RECOVERY,
+	MFG_MODE_CHARGE,
+	MFG_MODE_POWER_TEST,
+	MFG_MODE_OFFMODE_CHARGING,
+	MFG_MODE_MFGKERNEL_DIAG58,
+	MFG_MODE_GIFT_MODE,
+	MFG_MODE_MFGKERNEL,
+	MFG_MODE_MINI,
+};
 
 void __init msm_add_usb_devices(void (*phy_reset) (void));
 void __init msm_add_mem_devices(struct msm_pmem_setting *setting);
@@ -96,25 +149,30 @@ int __init msm_add_sdcc_devices(unsigned int controller, struct mmc_platform_dat
 int __init msm_add_serial_devices(unsigned uart);
 
 #if defined(CONFIG_USB_FUNCTION_MSM_HSUSB)
-/* START: add USB connected notify function */
 struct t_usb_status_notifier{
 	struct list_head notifier_link;
 	const char *name;
 	void (*func)(int online);
 };
-	int usb_register_notifier(struct t_usb_status_notifier *);
+	int htc_usb_register_notifier(struct t_usb_status_notifier *);
 	static LIST_HEAD(g_lh_usb_notifier_list);
-/* END: add USB connected notify function */
 #endif
+
+#ifdef CONFIG_RESET_BY_CABLE_IN
+void reset_dflipflop(void);
+#endif
+
+void __init htc_add_ramconsole_devices(void);
 
 int __init board_mfg_mode(void);
 int __init parse_tag_smi(const struct tag *tags);
 int __init parse_tag_hwid(const struct tag * tags);
 int __init parse_tag_skuid(const struct tag * tags);
 int parse_tag_engineerid(const struct tag * tags);
-void board_get_sku_color_tag(char **);
 
 char *board_serialno(void);
 unsigned long get_kernel_flag(void);
 unsigned int get_radio_flag(void);
+unsigned int get_tamper_sf(void);
+
 #endif

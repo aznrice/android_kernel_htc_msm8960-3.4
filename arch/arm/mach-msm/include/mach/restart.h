@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,22 +17,23 @@
 #define RESTART_NORMAL 0x0
 #define RESTART_DLOAD  0x1
 
-
 enum RAMDUMP_STATUS {
 	RAMDUMP_BUG = 1,
 	RAMDUMP_UNKNOWN_INST
 };
 
-#ifdef CONFIG_MSM_NATIVE_RESTART
-/* if arch_reset is called from userspace,
-   restart mode will be set to 'h' equal to 104.
-   As a result, we need MAX to know the mode is valid. */
-enum RESTART_MODE {
-	/* for legecy cmd restart */
-	RESTART_MODE_LEGECY = 0,
+#if defined(CONFIG_LGE_CRASH_HANDLER)
+#define SUB_THD_F_PWR	0x0190
+#define SUB_THD_F_SD	0x0110
+#define SUB_UNAB_THD	0x0120
+#define SUB_RESET_SOC	0x0130
+#define SUB_UNKNOWN	0x0140
+#endif
 
-	/* all other restart rised by kernel.
-	   these modes will all enter ramdump. */
+#if defined(CONFIG_MSM_NATIVE_RESTART)
+enum RESTART_MODE {
+	RESTART_MODE_LEGACY = 0,
+
 	RESTART_MODE_Q6_WATCHDOG_BITE,
 
 	RESTART_MODE_MODEM_CRASH,
@@ -46,23 +47,17 @@ enum RESTART_MODE {
 
 	RESTART_MODE_APP_WATCHDOG_BARK,
 	RESTART_MODE_ERASE_EFS,
-	/* This is pseudo enum to indicate the maximum,
-	   add new restart mode before this one. */
 	RESTART_MODE_MAX
 };
-
-void set_ramdump_reason(const char *msg);
-inline void soc_restart(char mode, const char *msg);
-inline void notify_modem_cache_flush_done(void);
-int check_in_panic(void);
-extern void send_q6_nmi(void);
 void msm_set_restart_mode(int mode);
-unsigned get_restart_reason(void);
+void msm_restart(char mode, const char *cmd);
+#elif defined(CONFIG_ARCH_FSM9XXX)
+void fsm_restart(char mode, const char *cmd);
 #else
 #define msm_set_restart_mode(mode)
 #endif
 
 extern int pmic_reset_irq;
-int wait_rmt_final_call_back(int timeout);
+
 #endif
 

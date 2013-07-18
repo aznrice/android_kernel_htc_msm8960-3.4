@@ -23,97 +23,97 @@ static struct msm_camera_i2c_reg_conf s5k6a1gx_groupoff_settings[] = {
 };
 
 static struct msm_camera_i2c_reg_conf s5k6a1gx_prev_settings[] = {
-	/*AE setting*/
-	{0x0202, 0x01}, /*coarse int time*/
+	
+	{0x0202, 0x01}, 
 	{0x0203, 0x4C},
-	{0x0204, 0x00}, /*analog gain*/
+	{0x0204, 0x00}, 
 	{0x0205, 0x20},
-	{0x0342, 0x05}, /* Min Line Length*/
+	{0x0342, 0x05}, 
 	{0x0343, 0xCE},
-	{0x0340, 0x04}, /*frame length line*/
+	{0x0340, 0x04}, 
 	{0x0341, 0x22},
 
-	/*size setting*/
-	{0x0344, 0x00}, /*x_addr_start_H*/
-	{0x0345, 0x00}, /*x_addr_start_L*/
-	{0x0346, 0x00}, /*y_addr_start_H*/
-	{0x0347, 0x00}, /*y_addr_start_L*/
+	
+	{0x0344, 0x00}, 
+	{0x0345, 0x00}, 
+	{0x0346, 0x00}, 
+	{0x0347, 0x00}, 
 
-	{0x0348, 0x05}, /*y_addr_end_H*/
-	{0x0349, 0x0F}, /*y_addr_end_L*/
+	{0x0348, 0x05}, 
+	{0x0349, 0x0F}, 
 
-	{0x034A, 0x04}, /*y_addr_end_H*/
-	{0x034B, 0x0F}, /*y_addr_end_L*/
+	{0x034A, 0x04}, 
+	{0x034B, 0x0F}, 
 
-	{0x034C, 0x05}, /*x_size_ouput 1280*/
+	{0x034C, 0x05}, 
 	{0x034D, 0x10},
 
-	{0x034E, 0x04}, /*y_size_ouput 720*/
+	{0x034E, 0x04}, 
 	{0x034F, 0x10},
 };
 
 static struct msm_camera_i2c_reg_conf s5k6a1gx_snap_settings[] = {
-	/*AE setting*/
-	{0x0202, 0x01}, /*coarse int time*/
+	
+	{0x0202, 0x01}, 
 	{0x0203, 0x4C},
-	{0x0204, 0x00}, /*analog gain*/
+	{0x0204, 0x00}, 
 	{0x0205, 0x20},
-	{0x0342, 0x05}, /* Min Line Length*/
+	{0x0342, 0x05}, 
 	{0x0343, 0xCE},
-	{0x0340, 0x04}, /*frame length line*/
+	{0x0340, 0x04}, 
 	{0x0341, 0x22},
 
-	/*size setting*/
-	{0x0344, 0x00}, /*x_addr_start_H*/
-	{0x0345, 0x00}, /*x_addr_start_L*/
-	{0x0346, 0x00}, /*y_addr_start_H*/
-	{0x0347, 0x00}, /*y_addr_start_L*/
+	
+	{0x0344, 0x00}, 
+	{0x0345, 0x00}, 
+	{0x0346, 0x00}, 
+	{0x0347, 0x00}, 
 
-	{0x0348, 0x05}, /*y_addr_end_H*/
-	{0x0349, 0x0F}, /*y_addr_end_L*/
+	{0x0348, 0x05}, 
+	{0x0349, 0x0F}, 
 
-	{0x034A, 0x04}, /*y_addr_end_H*/
-	{0x034B, 0x0F}, /*y_addr_end_L*/
+	{0x034A, 0x04}, 
+	{0x034B, 0x0F}, 
 
-	{0x034C, 0x05}, /*x_size_ouput 1280*/
+	{0x034C, 0x05}, 
 	{0x034D, 0x10},
 
-	{0x034E, 0x04}, /*y_size_ouput 720*/
+	{0x034E, 0x04}, 
 	{0x034F, 0x10},
 };
 
 static struct msm_camera_i2c_reg_conf s5k6a1gx_recommend_settings[] = {
-	{0x0103, 0x01}, /*sw reset*/
-	{0x301C, 0x35}, /*APS*/
-	{0x3016, 0x05}, /*Analog*/
-	{0x3034, 0x73}, /*Analog*/
-	{0x3037, 0x01}, /*Analog*/
-	{0x3035, 0x05}, /*Analog*/
-	{0x301E, 0x09}, /*Analog*/
-	{0x301B, 0xC0}, /*Analog*/
-	{0x3013, 0x28}, /*Analog*/
-	{0x3042, 0x01}, /*Analog*/
-	{0x303C, 0x01}, /*Analog*/
+	{0x0103, 0x01}, 
+	{0x301C, 0x35}, 
+	{0x3016, 0x05}, 
+	{0x3034, 0x73}, 
+	{0x3037, 0x01}, 
+	{0x3035, 0x05}, 
+	{0x301E, 0x09}, 
+	{0x301B, 0xC0}, 
+	{0x3013, 0x28}, 
+	{0x3042, 0x01}, 
+	{0x303C, 0x01}, 
 
-	/*Mclk=24Mhz*/
-	{0x30BC, 0x38}, /*outif_mld_ulpm_rxinit_limit[15:8] */
-	{0x30BD, 0x40}, /*outif_mld_ulpm_rxinit_limit[7:0] */
-	{0x3110, 0x70}, /*outif_enable_time[15:8] */
-	{0x3111, 0x80}, /*outif_enable_time[7:0] */
-	{0x3112, 0x7B}, /*streaming_enable_time[15:8] */
-	{0x3113, 0xC0}, /*streaming_enable_time[7:0] */
-	{0x30C7, 0x1A}, /*[5:4]esc_ref_div, [3] dphy_ulps_auto, [1]dphy_enable */
+	
+	{0x30BC, 0x38}, 
+	{0x30BD, 0x40}, 
+	{0x3110, 0x70}, 
+	{0x3111, 0x80}, 
+	{0x3112, 0x7B}, 
+	{0x3113, 0xC0}, 
+	{0x30C7, 0x1A}, 
 
-	/* 480Mbps */
-	{0x0305, 0x04}, /*pll_p*/
-	{0x0306, 0x00}, /*pll_m*/
+	
+	{0x0305, 0x04}, 
+	{0x0306, 0x00}, 
 	{0x0307, 0xA0},
-	{0x308D, 0x01}, /*pll_s*/
-	{0x0301, 0x0A}, /*vt_pix_clk_div*/
-	{0x0303, 0x01}, /*vt_sys_clk_div*/
+	{0x308D, 0x01}, 
+	{0x0301, 0x0A}, 
+	{0x0303, 0x01}, 
 
-	/*PLL*/
-	{0x0101, 0x00}, /*Vfilp + H mirror  0x03*/
+	
+	{0x0101, 0x00}, 
 };
 
 static struct v4l2_subdev_info s5k6a1gx_subdev_info[] = {
@@ -123,7 +123,7 @@ static struct v4l2_subdev_info s5k6a1gx_subdev_info[] = {
 	.fmt    = 1,
 	.order    = 0,
 	},
-	/* more can be supported, to be added later */
+	
 };
 
 static struct msm_camera_i2c_conf_array s5k6a1gx_init_conf[] = {
@@ -200,26 +200,12 @@ static struct msm_sensor_exp_gain_info_t s5k6a1gx_exp_gain_info = {
 	.coarse_int_time_addr = 0x202,
 	.global_gain_addr = 0x204,
 	.vert_offset = 4,
-	.min_vert = 4, /* min coarse integration time */ /* HTC Angie 20111019 - Fix FPS */
+	.min_vert = 4,  
 };
-
-static int s5k6a1gx_sensor_config(void __user *argp)
-{
-	return msm_sensor_config(&s5k6a1gx_s_ctrl, argp);
-}
 
 static int s5k6a1gx_sensor_open_init(const struct msm_camera_sensor_info *data)
 {
-	return msm_sensor_open_init(&s5k6a1gx_s_ctrl, data);
-}
-
-static int s5k6a1gx_sensor_release(void)
-{
-	int	rc = 0;
-
-	rc = msm_sensor_release(&s5k6a1gx_s_ctrl);
-
-	return rc;
+	return 0;
 }
 
 static const char *s5k6a1gxVendor = "samsung";
@@ -263,37 +249,22 @@ static int s5k6a1gx_sysfs_init(void)
 	return 0 ;
 }
 
-static const struct i2c_device_id s5k6a1gx_i2c_id[] = {
-	{SENSOR_NAME, (kernel_ulong_t)&s5k6a1gx_s_ctrl},
-	{ }
-};
-
-static struct i2c_driver s5k6a1gx_i2c_driver = {
-	.id_table = s5k6a1gx_i2c_id,
-	.probe  = msm_sensor_i2c_probe,
-	.driver = {
-		.name = SENSOR_NAME,
-	},
-};
-
 static struct msm_camera_i2c_client s5k6a1gx_sensor_i2c_client = {
 	.addr_type = MSM_CAMERA_I2C_WORD_ADDR,
 };
 
-static int s5k6a1gx_sensor_v4l2_probe(const struct msm_camera_sensor_info *info,
-	struct v4l2_subdev *sdev, struct msm_sensor_ctrl *s)
-{
-	int rc = -EINVAL;
-
-	rc = msm_sensor_v4l2_probe(&s5k6a1gx_s_ctrl, info, sdev, s);
-
-	return rc;
-}
-
-int32_t s5k6a1gx_power_up(const struct msm_camera_sensor_info *sdata)
+int32_t s5k6a1gx_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int rc;
+	struct msm_camera_sensor_info *sdata = NULL;
 	pr_info("%s\n", __func__);
+
+	if (s_ctrl && s_ctrl->sensordata)
+		sdata = s_ctrl->sensordata;
+	else {
+		pr_err("%s: s_ctrl sensordata NULL\n", __func__);
+		return (-1);
+	}
 
 	if (sdata->camera_power_on == NULL) {
 		pr_err("sensor platform_data didnt register\n");
@@ -311,13 +282,24 @@ int32_t s5k6a1gx_power_up(const struct msm_camera_sensor_info *sdata)
 		return rc;
 	}
 
-	return 0;  /*msm_sensor_power_up(sdata)*/
+	s5k6a1gx_sensor_open_init(sdata);
+	pr_info("%s end\n", __func__);
+
+	return 0;  
 }
 
-int32_t s5k6a1gx_power_down(const struct msm_camera_sensor_info *sdata)
+int32_t s5k6a1gx_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 {
 	int rc;
+	struct msm_camera_sensor_info *sdata = NULL;
 	pr_info("%s\n", __func__);
+
+	if (s_ctrl && s_ctrl->sensordata)
+		sdata = s_ctrl->sensordata;
+	else {
+		pr_err("%s: s_ctrl sensordata NULL\n", __func__);
+		return (-1);
+	}
 
 	if (sdata->camera_power_off == NULL) {
 		pr_err("sensor platform_data didnt register\n");
@@ -331,36 +313,45 @@ int32_t s5k6a1gx_power_down(const struct msm_camera_sensor_info *sdata)
 		pr_err("%s failed to disable power\n", __func__);
 		return rc;
 	}
-	return 0;  /*msm_sensor_power_down(sdata);*/
+	return 0;  
 }
 
-static int s5k6a1gx_probe(struct platform_device *pdev)
+int32_t s5k6a1gx_i2c_probe(struct i2c_client *client,
+	const struct i2c_device_id *id)
 {
 	int	rc = 0;
-
 	pr_info("%s\n", __func__);
-
-	rc = msm_sensor_register(pdev, s5k6a1gx_sensor_v4l2_probe);
+	rc = msm_sensor_i2c_probe(client, id);
 	if(rc >= 0)
 		s5k6a1gx_sysfs_init();
+	pr_info("%s: rc(%d)\n", __func__, rc);
 	return rc;
 }
 
-struct platform_driver s5k6a1gx_driver = {
-	.probe = s5k6a1gx_probe,
+static const struct i2c_device_id s5k6a1gx_i2c_id[] = {
+	{SENSOR_NAME, (kernel_ulong_t)&s5k6a1gx_s_ctrl},
+	{ }
+};
+
+static struct i2c_driver s5k6a1gx_i2c_driver = {
+	.id_table = s5k6a1gx_i2c_id,
+	.probe  = s5k6a1gx_i2c_probe,
 	.driver = {
-		.name = PLATFORM_DRIVER_NAME,
-		.owner = THIS_MODULE,
+		.name = SENSOR_NAME,
 	},
 };
 
 static int __init msm_sensor_init_module(void)
 {
-	pr_info("sss%s\n", __func__);
-	return platform_driver_register(&s5k6a1gx_driver);
+	pr_info("%s\n", __func__);
+	return i2c_add_driver(&s5k6a1gx_i2c_driver);
 }
 
-static struct v4l2_subdev_core_ops s5k6a1gx_subdev_core_ops;
+static struct v4l2_subdev_core_ops s5k6a1gx_subdev_core_ops = {
+	.ioctl = msm_sensor_subdev_ioctl,
+	.s_power = msm_sensor_power,
+};
+
 static struct v4l2_subdev_video_ops s5k6a1gx_subdev_video_ops = {
 	.enum_mbus_fmt = msm_sensor_v4l2_enum_fmt,
 };
@@ -376,18 +367,15 @@ static struct msm_sensor_fn_t s5k6a1gx_func_tbl = {
 	.sensor_group_hold_on = msm_sensor_group_hold_on,
 	.sensor_group_hold_off = msm_sensor_group_hold_off,
 	.sensor_set_fps = msm_sensor_set_fps,
-	.sensor_write_exp_gain = msm_sensor_write_exp_gain1,
-	.sensor_write_snapshot_exp_gain = msm_sensor_write_exp_gain1,
+	.sensor_write_exp_gain_ex = msm_sensor_write_exp_gain1_ex,
+	.sensor_write_snapshot_exp_gain_ex = msm_sensor_write_exp_gain1_ex,
 	.sensor_setting = msm_sensor_setting,
 	.sensor_set_sensor_mode = msm_sensor_set_sensor_mode,
 	.sensor_mode_init = msm_sensor_mode_init,
 	.sensor_get_output_info = msm_sensor_get_output_info,
-	.sensor_config = s5k6a1gx_sensor_config,
-	.sensor_open_init = s5k6a1gx_sensor_open_init,
-	.sensor_release = s5k6a1gx_sensor_release,
+	.sensor_config = msm_sensor_config,
 	.sensor_power_up = s5k6a1gx_power_up,
 	.sensor_power_down = s5k6a1gx_power_down,
-	.sensor_probe = msm_sensor_probe,
 };
 
 static struct msm_sensor_reg_t s5k6a1gx_regs = {

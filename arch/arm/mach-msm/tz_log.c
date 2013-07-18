@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -19,9 +19,6 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <asm/uaccess.h>
-
-#include <mach/scm.h>
-#include <mach/msm_iomap.h>
 
 #define DEBUG_MAX_RW_BUF 4096
 
@@ -56,8 +53,10 @@ struct tzdbg_vmid_t {
  * Boot Info Table
  */
 struct tzdbg_boot_info_t {
-	uint32_t entry_cnt;	/* Warmboot entry CPU Counter */
-	uint32_t exit_cnt;	/* Warmboot exit CPU Counter */
+	uint32_t wb_entry_cnt;	/* Warmboot entry CPU Counter */
+	uint32_t wb_exit_cnt;	/* Warmboot exit CPU Counter */
+	uint32_t pc_entry_cnt;	/* Power Collapse entry CPU Counter */
+	uint32_t pc_exit_cnt;	/* Power Collapse exit CPU counter */
 	uint32_t warm_jmp_addr;	/* Last Warmboot Jump Address */
 	uint32_t spare;	/* Reserved for future use. */
 };
@@ -187,17 +186,6 @@ static struct tzdbg tzdbg = {
 	.stat[TZDBG_LOG].name = "log",
 };
 
-#define TZ_SCM_LOG_PHYS		MSM_TZLOG_PHYS
-#define TZ_SCM_LOG_SIZE		MSM_TZLOG_SIZE
-#define INT_SIZE		4
-
-struct htc_tzlog_dev {
-	char *buffer;
-	int *pw_cursor;
-	int *pr_cursor;
-};
-
-struct htc_tzlog_dev *htc_tzlog;
 
 /*
  * Debugfs data structure and functions
@@ -264,9 +252,12 @@ static int _disp_tz_boot_stats(void)
 				"  CPU #: %d\n"
 				"     Warmboot jump address     : 0x%x\n"
 				"     Warmboot entry CPU counter: 0x%x\n"
-				"     Warmboot exit CPU counter : 0x%x\n",
-				i, ptr->warm_jmp_addr, ptr->entry_cnt,
-				ptr->exit_cnt);
+				"     Warmboot exit CPU counter : 0x%x\n"
+				"     Power Collapse entry CPU counter: 0x%x\n"
+				"     Power Collapse exit CPU counter : 0x%x\n",
+				i, ptr->warm_jmp_addr, ptr->wb_entry_cnt,
+				ptr->wb_exit_cnt, ptr->pc_entry_cnt,
+				ptr->pc_exit_cnt);
 
 		if (len > (DEBUG_MAX_RW_BUF - 1)) {
 			pr_warn("%s: Cannot fit all info into the buffer\n",
@@ -354,7 +345,7 @@ static int _disp_tz_interrupt_stats(void)
 	tzdbg.stat[TZDBG_INTERRUPT].data = tzdbg.disp_buf;
 	return len;
 }
-#if 0
+
 static int _disp_tz_log_stats(void)
 {
 	int len = 0;
@@ -368,67 +359,7 @@ static int _disp_tz_log_stats(void)
 	tzdbg.stat[TZDBG_LOG].data = tzdbg.disp_buf;
 	return len;
 }
-#else
-static int _disp_tz_htc_log_stats(char __user *ubuf, size_t count, loff_t *offp)
-{
-	char *buf = htc_tzlog->buffer;
-	int *pw_cursor = htc_tzlog->pw_cursor;
-	int *pr_cursor = htc_tzlog->pr_cursor;
-	int r_cursor, w_cursor, ret;
 
-	if (buf != 0) {
-		/* update r_cursor */
-		r_cursor = *pr_cursor;
-		w_cursor = *pw_cursor;
-
-		if (r_cursor < w_cursor) {
-			if ((w_cursor - r_cursor) > count) {
-				ret = copy_to_user(ubuf, buf + r_cursor, count);
-				if (ret == count)
-					return -EFAULT;
-
-				*pr_cursor = r_cursor + count;
-				return count;
-			} else {
-				ret = copy_to_user(ubuf, buf + r_cursor, (w_cursor - r_cursor));
-				if (ret == (w_cursor - r_cursor))
-					return -EFAULT;
-
-				*pr_cursor = w_cursor;
-				return (w_cursor - r_cursor);
-			}
-		}
-
-		if (r_cursor > w_cursor) {
-			int buf_end = TZ_SCM_LOG_SIZE - 2*INT_SIZE - 1;
-			int left_len = buf_end - r_cursor;
-
-			if (left_len > count) {
-				ret = copy_to_user(ubuf, buf + r_cursor, count);
-				if (ret == count)
-					return -EFAULT;
-
-				*pr_cursor = r_cursor + count;
-				return count;
-			} else {
-				ret = copy_to_user(ubuf, buf + r_cursor, left_len);
-				if (ret == left_len)
-					return -EFAULT;
-
-				*pr_cursor = 0;
-				return left_len;
-			}
-		}
-
-		if (r_cursor == w_cursor) {
-			pr_info("No New Trust Zone log\n");
-			return 0;
-		}
-	}
-
-	return 0;
-}
-#endif
 static ssize_t tzdbgfs_read(struct file *file, char __user *buf,
 	size_t count, loff_t *offp)
 {
@@ -454,12 +385,8 @@ static ssize_t tzdbgfs_read(struct file *file, char __user *buf,
 		len = _disp_tz_vmid_stats();
 		break;
 	case TZDBG_LOG:
-#if 0
 		len = _disp_tz_log_stats();
 		break;
-#else
-		return _disp_tz_htc_log_stats(buf, count, offp);
-#endif
 	default:
 		break;
 	}
@@ -591,36 +518,6 @@ static int __devinit tz_log_probe(struct platform_device *pdev)
 
 	tzdbg.diag_buf = (struct tzdbg_t *)ptr;
 
-	htc_tzlog = kzalloc(sizeof(struct htc_tzlog_dev), GFP_KERNEL);
-	if (!htc_tzlog) {
-		pr_err("%s: Can't Allocate memory: scm_dev\n", __func__);
-		return -ENOMEM;
-	}
-
-	htc_tzlog->buffer = devm_ioremap_nocache(&pdev->dev,
-		TZ_SCM_LOG_PHYS, TZ_SCM_LOG_SIZE);
-	if (htc_tzlog->buffer == NULL) {
-		pr_err("%s: ioremap fail...\n", __func__);
-		kfree(htc_tzlog);
-		return -EFAULT;
-	}
-
-	htc_tzlog->pr_cursor = (int *)((int)(htc_tzlog->buffer) +
-				 TZ_SCM_LOG_SIZE - 2*INT_SIZE);
-	htc_tzlog->pw_cursor = (int *)((int)(htc_tzlog->buffer) +
-				 TZ_SCM_LOG_SIZE - INT_SIZE);
-
-	pr_info("tzlog buffer address %x\n", TZ_SCM_LOG_PHYS);
-	memset(htc_tzlog->buffer, 0, TZ_SCM_LOG_SIZE);
-
-	secure_log_operation(0, 0, TZ_SCM_LOG_PHYS, 32 * 64, 0);
-
-	pr_info("[TZ] ---LOG START---\n");
-	pr_info("%s", htc_tzlog->buffer);
-	pr_info("[TZ] --- LOG END---\n");
-
-	secure_log_operation(TZ_SCM_LOG_PHYS, TZ_SCM_LOG_SIZE, 0, 0, 0);
-
 	if (tzdbgfs_init(pdev))
 		goto err;
 
@@ -639,12 +536,19 @@ static int __devexit tz_log_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static struct of_device_id tzlog_match[] = {
+	{	.compatible = "qcom,tz-log",
+	},
+	{}
+};
+
 static struct platform_driver tz_log_driver = {
 	.probe		= tz_log_probe,
 	.remove		= __devexit_p(tz_log_remove),
 	.driver		= {
 		.name = "tz_log",
 		.owner = THIS_MODULE,
+		.of_match_table = tzlog_match,
 	},
 };
 
@@ -663,5 +567,5 @@ module_exit(tz_log_exit);
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("TZ Log driver");
-MODULE_VERSION("1.0");
+MODULE_VERSION("1.1");
 MODULE_ALIAS("platform:tz_log");

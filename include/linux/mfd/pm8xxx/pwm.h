@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2013, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,9 +17,8 @@
 
 #define PM8XXX_PWM_DEV_NAME	"pm8xxx-pwm"
 
-#define PM8XXX_PWM_PERIOD_MAX		(327 * USEC_PER_SEC)
-#define PM8XXX_PWM_PERIOD_MIN		7 /* micro seconds */
-
+#define PM8XXX_PWM_PERIOD_MIN	7 /* usec: 19.2M, n=6, m=0, pre=2 */
+#define PM8XXX_PWM_PERIOD_MAX	(384 * USEC_PER_SEC) /* 1K, n=9, m=7, pre=6 */
 #define PM_PWM_LUT_SIZE			64
 #define PM_PWM_LUT_DUTY_TIME_MAX	512	/* ms */
 #define PM_PWM_LUT_PAUSE_MAX		(7000 * PM_PWM_LUT_DUTY_TIME_MAX)
@@ -32,6 +31,9 @@
 #define PM_PWM_LUT_PAUSE_LO_EN	0x20
 
 #define PM_PWM_LUT_NO_TABLE	0x100
+
+#define PM_PWM_BANK_LO		0x1000
+#define PM_PWM_BANK_HI		0x2000
 
 /**
  * PWM frequency/period control
@@ -75,6 +77,28 @@ struct pm8xxx_pwm_period {
 	enum pm_pwm_clk		clk;
 	enum pm_pwm_pre_div	pre_div;
 	int			pre_div_exp;
+};
+
+/**
+ * struct pm8xxx_pwm_duty_cycles - PWM duty cycle info
+ * duty_pcts - pointer to an array of duty percentage for a pwm period
+ * num_duty_pcts - total entries in duty_pcts array
+ * duty_ms - duty cycle time in ms
+ * start_idx - index in the LUT
+ */
+struct pm8xxx_pwm_duty_cycles {
+	int *duty_pcts;
+	int num_duty_pcts;
+	int duty_ms;
+	int start_idx;
+};
+
+/**
+ * struct pm8xxx_pwm_platform_data - PWM platform data
+ * dtest_channel - Enable LPG DTEST mode for this LPG channel
+ */
+struct pm8xxx_pwm_platform_data {
+	int dtest_channel;
 };
 
 /**

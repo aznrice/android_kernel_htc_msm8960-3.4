@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, The Linux Foundation. All rights reserved.
 *
 * This program is free software; you can redistribute it and/or modify
 * it under the terms of the GNU General Public License version 2 and
@@ -140,9 +140,6 @@ static void pcm_afe_process_tx_pkt(uint32_t opcode,
 						runtime->channels * 2)));
 				pr_debug("prtd->poll_time: %d",
 						prtd->poll_time);
-				hrtimer_start(&prtd->hrt,
-					ns_to_ktime(0),
-					HRTIMER_MODE_REL);
 				break;
 			}
 			case AFE_EVENT_RTPORT_STOP:
@@ -206,9 +203,6 @@ static void pcm_afe_process_rx_pkt(uint32_t opcode,
 				snd_pcm_lib_period_bytes(prtd->substream)
 					* 1000 * 1000)/(runtime->rate
 					* runtime->channels * 2)));
-			hrtimer_start(&prtd->hrt,
-				ns_to_ktime(0),
-				HRTIMER_MODE_REL);
 			pr_debug("prtd->poll_time : %d", prtd->poll_time);
 			break;
 		}
@@ -328,8 +322,8 @@ static int msm_afe_open(struct snd_pcm_substream *substream)
 				(app_cb)q6asm_event_handler, prtd);
 	if (!prtd->audio_client) {
 		pr_debug("%s: Could not allocate memory\n", __func__);
-		kfree(prtd);
 		mutex_unlock(&prtd->lock);
+		kfree(prtd);
 		return -ENOMEM;
 	}
 	hrtimer_init(&prtd->hrt, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
@@ -465,6 +459,8 @@ static int msm_afe_trigger(struct snd_pcm_substream *substream, int cmd)
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		pr_debug("%s: SNDRV_PCM_TRIGGER_START\n", __func__);
 		prtd->start = 1;
+		hrtimer_start(&prtd->hrt, ns_to_ktime(0),
+					HRTIMER_MODE_REL);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:

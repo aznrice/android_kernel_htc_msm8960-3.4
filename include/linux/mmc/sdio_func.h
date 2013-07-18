@@ -9,8 +9,8 @@
  * your option) any later version.
  */
 
-#ifndef MMC_SDIO_FUNC_H
-#define MMC_SDIO_FUNC_H
+#ifndef LINUX_MMC_SDIO_FUNC_H
+#define LINUX_MMC_SDIO_FUNC_H
 
 #include <linux/device.h>
 #include <linux/mod_devicetable.h>
@@ -88,8 +88,6 @@ struct sdio_driver {
 
 	int (*probe)(struct sdio_func *, const struct sdio_device_id *);
 	void (*remove)(struct sdio_func *);
-    int (*suspend)(struct sdio_func *, pm_message_t state);
-    int (*resume) (struct sdio_func *);
 
 	struct device_driver drv;
 };
@@ -173,5 +171,4 @@ extern void sdio_f0_writeb(struct sdio_func *func, unsigned char b,
 extern mmc_pm_flag_t sdio_get_host_pm_caps(struct sdio_func *func);
 extern int sdio_set_host_pm_flags(struct sdio_func *func, mmc_pm_flag_t flags);
 
-#endif
-
+#endif /* LINUX_MMC_SDIO_FUNC_H */

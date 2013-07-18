@@ -180,7 +180,7 @@ static int input_handle_abs_event(struct input_dev *dev,
 		return INPUT_IGNORE_EVENT;
 	}
 
-	is_mt_event = code >= ABS_MT_FIRST && code <= ABS_MT_LAST;
+	is_mt_event = input_is_mt_value(code);
 
 	if (!is_mt_event) {
 		pold = &dev->absinfo[code].value;
@@ -1570,8 +1570,6 @@ void input_reset_device(struct input_dev *dev)
 	if (dev->users) {
 		input_dev_toggle(dev, true);
 
-		/* Remove this because conflict with hTC quickboot  */
-#if 0
 		/*
 		 * Keys that have been pressed at suspend time are unlikely
 		 * to be still pressed when we resume.
@@ -1579,7 +1577,6 @@ void input_reset_device(struct input_dev *dev)
 		spin_lock_irq(&dev->event_lock);
 		input_dev_release_keys(dev);
 		spin_unlock_irq(&dev->event_lock);
-#endif
 	}
 
 	mutex_unlock(&dev->mutex);
@@ -1627,7 +1624,7 @@ static struct device_type input_dev_type = {
 #endif
 };
 
-static char *input_devnode(struct device *dev, mode_t *mode)
+static char *input_devnode(struct device *dev, umode_t *mode)
 {
 	return kasprintf(GFP_KERNEL, "input/%s", dev_name(dev));
 }

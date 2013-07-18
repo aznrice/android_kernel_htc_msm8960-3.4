@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,7 +15,6 @@
 #define __ARCH_ARM_MACH_PMIC_H
 
 #include <linux/types.h>
-#include <linux/seq_file.h>
 
 enum spkr_ldo_v_sel {
 	VOLT_LEVEL_1_1V,
@@ -746,7 +745,4 @@ int pmic_gpio_set_value(unsigned gpio, int value);
 int pmic_gpio_get_value(unsigned gpio);
 int pmic_gpio_get_direction(unsigned gpio);
 int pmic_gpio_config(struct pm8xxx_gpio_rpc_cfg *);
-#ifdef CONFIG_PMIC8058
-int pmic8058_dump_gpios(struct seq_file *m, int curr_len, char *gpio_buffer);
-#endif
 #endif

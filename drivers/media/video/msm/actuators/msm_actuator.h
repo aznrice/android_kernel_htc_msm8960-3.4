@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011-2012, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,8 +12,10 @@
 #ifndef MSM_ACTUATOR_H
 #define MSM_ACTUATOR_H
 
+#include <linux/module.h>
 #include <linux/i2c.h>
 #include <mach/camera.h>
+#include <mach/gpio.h>
 #include <media/v4l2-subdev.h>
 #include <media/msm_camera.h>
 #include "msm_camera_i2c.h"
@@ -41,20 +43,6 @@
 #endif
 
 struct msm_actuator_ctrl_t;
-
-struct region_params_t {
-	/* [0] = ForwardDirection Macro boundary
-	   [1] = ReverseDirection Inf boundary
-	 */
-	uint16_t step_bound[2];
-	uint16_t code_per_step;
-};
-
-struct damping_params_t {
-	uint16_t damping_step;
-	uint16_t damping_delay;
-	void *hw_params;
-};
 
 struct damping_t {
 	struct damping_params_t *ringing_params;
@@ -104,6 +92,8 @@ struct msm_actuator_ctrl_t {
 	uint16_t region_size;
 	struct damping_t *damping[2];
 	void *user_data;
+	uint32_t vcm_pwd;
+	uint32_t vcm_enable;
 };
 
 int32_t msm_actuator_i2c_write_b_af(struct msm_actuator_ctrl_t *a_ctrl,
@@ -111,7 +101,7 @@ int32_t msm_actuator_i2c_write_b_af(struct msm_actuator_ctrl_t *a_ctrl,
 		uint8_t lsb);
 int32_t msm_actuator_config(struct msm_actuator_ctrl_t *a_ctrl,
 		struct msm_actuator_info *board_info,
-		void __user *cfg_data); /* HTC Angie 20111212 - Rawchip */
+		void __user *cfg_data); 
 int32_t msm_actuator_move_focus(struct msm_actuator_ctrl_t *a_ctrl,
 		int direction,
 		int32_t num_steps);

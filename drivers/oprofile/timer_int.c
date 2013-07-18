@@ -22,12 +22,11 @@
 
 static DEFINE_PER_CPU(struct hrtimer, oprofile_hrtimer);
 static int ctr_running;
-static int period = (TICK_NSEC/50);
 
 static enum hrtimer_restart oprofile_hrtimer_notify(struct hrtimer *hrtimer)
 {
 	oprofile_add_sample(get_irq_regs(), 0);
-	hrtimer_forward_now(hrtimer, ns_to_ktime(period));
+	hrtimer_forward_now(hrtimer, ns_to_ktime(TICK_NSEC));
 	return HRTIMER_RESTART;
 }
 
@@ -41,7 +40,7 @@ static void __oprofile_hrtimer_start(void *unused)
 	hrtimer_init(hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	hrtimer->function = oprofile_hrtimer_notify;
 
-	hrtimer_start(hrtimer, ns_to_ktime(period),
+	hrtimer_start(hrtimer, ns_to_ktime(TICK_NSEC),
 		      HRTIMER_MODE_REL_PINNED);
 }
 
@@ -98,24 +97,24 @@ static struct notifier_block __refdata oprofile_cpu_notifier = {
 	.notifier_call = oprofile_cpu_notify,
 };
 
-int oprofile_timer_init(struct oprofile_operations *ops)
+static int oprofile_hrtimer_setup(void)
 {
-	int rc;
-
-	rc = register_hotcpu_notifier(&oprofile_cpu_notifier);
-	if (rc)
-		return rc;
-	ops->create_files = NULL;
-	ops->setup = NULL;
-	ops->shutdown = NULL;
-	ops->start = oprofile_hrtimer_start;
-	ops->stop = oprofile_hrtimer_stop;
-	ops->cpu_type = "timer";
-	printk(KERN_INFO "oprofile: using timer interrupt.\n");
-	return 0;
+	return register_hotcpu_notifier(&oprofile_cpu_notifier);
 }
 
-void oprofile_timer_exit(void)
+static void oprofile_hrtimer_shutdown(void)
 {
 	unregister_hotcpu_notifier(&oprofile_cpu_notifier);
+}
+
+int oprofile_timer_init(struct oprofile_operations *ops)
+{
+	ops->create_files	= NULL;
+	ops->setup		= oprofile_hrtimer_setup;
+	ops->shutdown		= oprofile_hrtimer_shutdown;
+	ops->start		= oprofile_hrtimer_start;
+	ops->stop		= oprofile_hrtimer_stop;
+	ops->cpu_type		= "timer";
+	printk(KERN_INFO "oprofile: using timer interrupt.\n");
+	return 0;
 }
