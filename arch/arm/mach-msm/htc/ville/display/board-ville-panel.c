@@ -177,6 +177,9 @@ static struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = VILLE_GPIO_LCD_TE,
 	.mdp_max_clk = 200000000,
+	.mdp_max_bw = 2000000000,
+	.mdp_bw_ab_factor = 115,
+	.mdp_bw_ib_factor = 150,
 #ifdef CONFIG_MSM_BUS_SCALING
 	.mdp_bus_scale_table = &mdp_bus_scale_pdata,
 #endif
@@ -186,6 +189,10 @@ static struct msm_panel_common_pdata mdp_pdata = {
 #else
 	.mem_hid = MEMTYPE_EBI1,
 #endif
+	.cont_splash_enabled = 0x00,
+	.splash_screen_addr = 0x00,
+	.splash_screen_size = 0x00,
+	.mdp_iommu_split_domain = 0,
 };
 
 void __init msm8960_mdp_writeback(struct memtype_reserve* reserve_table)
@@ -283,7 +290,7 @@ static struct platform_device wfd_device = {
 };
 #endif
 
-int ville_panel_first_init = 1;
+extern int mipi_lcd_on;
 static bool dsi_power_on;
 
 static int mipi_dsi_panel_power(int on)
@@ -382,7 +389,7 @@ static int mipi_dsi_panel_power(int on)
 			return -ENODEV;
 		}
 
-		if (!ville_panel_first_init) {
+		if (!mipi_lcd_on) {
 			msleep(10);
 			gpio_set_value(VILLE_GPIO_LCD_RSTz, 1);
 			msleep(1);
@@ -426,9 +433,15 @@ static int mipi_dsi_panel_power(int on)
 	return 0;
 }
 
+static char mipi_dsi_splash_is_enabled(void)
+{
+	return mdp_pdata.cont_splash_enabled;
+}
+
 static struct mipi_dsi_platform_data mipi_dsi_pdata = {
 	.vsync_gpio = VILLE_GPIO_LCD_TE,
 	.dsi_power_save = mipi_dsi_panel_power,
+	.splash_is_enabled = mipi_dsi_splash_is_enabled,
 };
 
 static struct platform_device mipi_dsi_ville_panel_device = {
