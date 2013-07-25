@@ -757,7 +757,7 @@ static int __init vfp_init(void)
 				elf_hwcap |= HWCAP_VFPv4;
 		}
 	}
-
+#endif
 #ifdef CONFIG_PROC_FS
 	procfs_entry = create_proc_entry("cpu/vfp_bounce", S_IRUGO, NULL);
 
